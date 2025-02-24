@@ -137,9 +137,10 @@ const ProfileManager = () => {
   useEffect(() => {
     if (activeProfileId) {
       localStorage.setItem('activeProfileId', activeProfileId);
-      localStorage.setItem('userProfile', JSON.stringify(
-        profiles.find(p => p.id === activeProfileId)
-      ));
+      const activeProfile = profiles.find(p => p.id === activeProfileId);
+      if (activeProfile) {
+        localStorage.setItem('userProfile', JSON.stringify(activeProfile));
+      }
     }
   }, [activeProfileId, profiles]);
 
@@ -162,7 +163,11 @@ const ProfileManager = () => {
   };
 
   const handleEditProfile = (profile) => {
-    setFormData(profile);
+    setFormData({
+      ...profile,
+      physicalLimitations: profile.physicalLimitations || [],
+      equipment: profile.equipment || []
+    });
     setPreviewImage(profile.profileImage);
     setEditingProfile(profile);
     setShowProfileForm(true);
@@ -230,7 +235,12 @@ const ProfileManager = () => {
     }
 
     const profileId = formData.id || Date.now().toString();
-    const newProfile = { ...formData, id: profileId };
+    const newProfile = { 
+      ...formData, 
+      id: profileId,
+      physicalLimitations: formData.physicalLimitations || [],
+      equipment: formData.equipment || []
+    };
 
     setProfiles(prev => {
       const updatedProfiles = editingProfile
@@ -256,18 +266,18 @@ const ProfileManager = () => {
   const handleLimitationsChange = (limitation) => {
     setFormData(prev => ({
       ...prev,
-      physicalLimitations: prev.physicalLimitations.includes(limitation)
+      physicalLimitations: prev.physicalLimitations && prev.physicalLimitations.includes(limitation)
         ? prev.physicalLimitations.filter(r => r !== limitation)
-        : [...prev.physicalLimitations, limitation]
+        : [...(prev.physicalLimitations || []), limitation]
     }));
   };
 
   const handleEquipmentToggle = (equipment) => {
     setFormData(prev => ({
       ...prev,
-      equipment: prev.equipment.includes(equipment)
+      equipment: prev.equipment && prev.equipment.includes(equipment)
         ? prev.equipment.filter(a => a !== equipment)
-        : [...prev.equipment, equipment]
+        : [...(prev.equipment || []), equipment]
     }));
   };
 
@@ -353,328 +363,328 @@ const ProfileManager = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <ProfileImage src={profile.profileThumbnail} size="medium" />
-                            <div>
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-semibold text-gray-800">
-                                  {profile.name}
-                                </h3>
-                                {profile.id === activeProfileId && (
-                                  <span className="px-2 py-1 text-xs bg-[#4A90E2] text-white rounded-full">
-                                    Active
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm text-gray-600 mt-1">
-                                {FITNESS_LEVELS.find(level => level.value === profile.fitnessLevel)?.level} Athlete
-                                • Age {profile.age}
-                              </p>
-                              {profile.physicalLimitations.length > 0 && (
-                                <p className="text-sm text-gray-500 mt-1">
-                                  Limitations: {profile.physicalLimitations.join(', ')}
-                                </p>
+                        <div className="flex items-center gap-4">
+                          <ProfileImage src={profile.profileThumbnail} size="medium" />
+                          <div>
+                            <div className="flex items-center gap-3">
+                              <h3 className="text-lg font-semibold text-gray-800">
+                                {profile.name}
+                              </h3>
+                              {profile.id === activeProfileId && (
+                                <span className="px-2 py-1 text-xs bg-[#4A90E2] text-white rounded-full">
+                                  Active
+                                </span>
                               )}
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleSelectProfile(profile.id)}
-                              className={`p-2 rounded-lg transition-colors ${
-                                profile.id === activeProfileId
-                                  ? 'text-[#4A90E2] bg-white'
-                                  : 'text-gray-600 hover:bg-gray-100'
-                              }`}
-                            >
-                              {profile.id === activeProfileId ? 'Selected' : 'Select'}
-                            </button>
-                            <button
-                              onClick={() => handleEditProfile(profile)}
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                              <Edit className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProfile(profile)}
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {FITNESS_LEVELS.find(level => level.value === profile.fitnessLevel)?.level} Athlete
+                              • Age {profile.age}
+                            </p>
+                            {profile.physicalLimitations && profile.physicalLimitations.length > 0 && (
+                              <p className="text-sm text-gray-500 mt-1">
+                                Limitations: {profile.physicalLimitations.join(', ')}
+                              </p>
+                            )}
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleSelectProfile(profile.id)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              profile.id === activeProfileId
+                                ? 'text-[#4A90E2] bg-white'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            {profile.id === activeProfileId ? 'Selected' : 'Select'}
+                          </button>
+                          <button
+                            onClick={() => handleEditProfile(profile)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProfile(profile)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {activeProfileId && (
-                  <div className="flex justify-center mt-6">
-                    <button
-                      onClick={handleStartChat}
-                      className="flex items-center gap-2 px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
-                    >
-                      <MessageSquare className="w-5 h-5" />
-                      Chat with Max
-                    </button>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Profile Form */}
-          {showProfileForm && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl shadow-xl overflow-hidden"
-            >
-              <div className="bg-[#4A90E2] p-6 text-white">
-                <div className="flex items-center gap-4">
-                  <Dumbbell className="w-8 h-8" />
-                  <h1 className="text-2xl font-bold">
-                    {editingProfile ? 'Edit Profile' : 'Create New Profile'}
-                  </h1>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="p-6 space-y-8">
-                {/* Profile Picture Section */}
-                <div className="flex flex-col items-center space-y-4">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-                  
-                  <ProfileImage 
-                    src={previewImage || formData.profileImage} 
-                    size="large"
-                    editable={true}
-                  />
-                  
-                  {imageError && (
-                    <p className="text-red-500 text-sm">{imageError}</p>
-                  )}
-                  
-                  <p className="text-sm text-gray-500">
-                    Click the camera icon to upload a profile picture
-                  </p>
-                </div>
-
-                {/* Basic Info Section */}
-                <div className="space-y-4">
-                  <h2 className="text-xl font-semibold text-gray-800">Basic Information</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Name</label>
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                        placeholder="Enter your name"
-                      />
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">Age</label>
-                      <input
-                        type="number"
-                        value={formData.age}
-                        onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
-                        className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                        placeholder="Enter your age"
-                        min="1"
-                        max="120"
-                      />
-                    </div>
-                  </div>
+                  ))}
                 </div>
+              )}
 
-                {/* Fitness Level Section */}
-                <div className="space-y-4">
-                  <h2 className="text-xl font-semibold text-gray-800">Fitness Experience</h2>
-                  <div className="relative">
-                    <select
-                      value={formData.fitnessLevel}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, fitnessLevel: e.target.value }));
-                        setSelectedLevel(FITNESS_LEVELS.find(level => level.value === e.target.value));
-                        setShowLevelDescription(true);
-                      }}
-                      onBlur={() => setShowLevelDescription(false)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent appearance-none cursor-pointer"
-                    >
-                      <option value="">Select your fitness level</option>
-                      {FITNESS_LEVELS.map((level) => (
-                        <option key={level.value} value={level.value}>
-                          {level.level}
-                        </option>
-                      ))}
-                    </select>
-                    
-                    <AnimatePresence>
-                      {showLevelDescription && selectedLevel && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className="absolute mt-2 p-4 bg-white border border-gray-200 rounded-lg shadow-lg z-10 w-full"
-                        >
-                          <p className="text-sm text-gray-600">{selectedLevel.description}</p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+              {activeProfileId && (
+                <div className="flex justify-center mt-6">
+                  <button
+                    onClick={handleStartChat}
+                    className="flex items-center gap-2 px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
+                  >
+                    <MessageSquare className="w-5 h-5" />
+                    Chat with Max
+                  </button>
                 </div>
+              )}
+            </div>
+          </motion.div>
+        )}
 
-                {/* Physical Limitations Section */}
-                <div className="space-y-4">
-                  <h2 className="text-xl font-semibold text-gray-800">Physical Limitations</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {PHYSICAL_LIMITATIONS.map((limitation) => (
-                      <motion.div
-                        key={limitation}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            checked={formData.physicalLimitations.includes(limitation)}
-                            onChange={() => handleLimitationsChange(limitation)}
-                            className="w-4 h-4 text-[#4A90E2] border-gray-300 rounded focus:ring-[#4A90E2]"
-                          />
-                          <span className="ml-2 text-sm">{limitation}</span>
-                        </label>
-                      </motion.div>
-                    ))}
-                  </div>
-                  <div className="mt-4">
-                    <label className="text-sm font-medium text-gray-700">Other Limitations</label>
+        {/* Profile Form */}
+        {showProfileForm && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-2xl shadow-xl overflow-hidden"
+          >
+            <div className="bg-[#4A90E2] p-6 text-white">
+              <div className="flex items-center gap-4">
+                <Dumbbell className="w-8 h-8" />
+                <h1 className="text-2xl font-bold">
+                  {editingProfile ? 'Edit Profile' : 'Create New Profile'}
+                </h1>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-8">
+              {/* Profile Picture Section */}
+              <div className="flex flex-col items-center space-y-4">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                
+                <ProfileImage 
+                  src={previewImage || formData.profileImage} 
+                  size="large"
+                  editable={true}
+                />
+                
+                {imageError && (
+                  <p className="text-red-500 text-sm">{imageError}</p>
+                )}
+                
+                <p className="text-sm text-gray-500">
+                  Click the camera icon to upload a profile picture
+                </p>
+              </div>
+
+              {/* Basic Info Section */}
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold text-gray-800">Basic Information</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Name</label>
                     <input
                       type="text"
-                      value={formData.otherLimitations}
-                      onChange={(e) => setFormData(prev => ({ ...prev, otherLimitations: e.target.value }))}
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                       className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                      placeholder="Enter any other physical limitations..."
+                      placeholder="Enter your name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Age</label>
+                    <input
+                      type="number"
+                      value={formData.age}
+                      onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
+                      className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                      placeholder="Enter your age"
+                      min="1"
+                      max="120"
                     />
                   </div>
                 </div>
+              </div>
 
-                {/* Equipment Section */}
-                <div className="space-y-4">
-                  <h2 className="text-xl font-semibold text-gray-800">Available Equipment</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {AVAILABLE_EQUIPMENT.map((equipment) => (
-                      <motion.button
-                        key={equipment.name}
-                        type="button"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => handleEquipmentToggle(equipment.name)}
-                        className={`p-4 rounded-lg border ${
-                          formData.equipment.includes(equipment.name)
-                            ? 'border-[#4A90E2] bg-[#E8F4FF]'
-                            : 'border-gray-200 hover:bg-gray-50'
-                        } transition-colors duration-200`}
-                      >
-                        <div className="text-2xl mb-2">{equipment.icon}</div>
-                        <div className="text-sm font-medium">{equipment.name}</div>
-                        <div className="text-xs text-gray-500">{equipment.category}</div>
-                      </motion.button>
+              {/* Fitness Level Section */}
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold text-gray-800">Fitness Experience</h2>
+                <div className="relative">
+                  <select
+                    value={formData.fitnessLevel}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, fitnessLevel: e.target.value }));
+                      setSelectedLevel(FITNESS_LEVELS.find(level => level.value === e.target.value));
+                      setShowLevelDescription(true);
+                    }}
+                    onBlur={() => setShowLevelDescription(false)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent appearance-none cursor-pointer"
+                  >
+                    <option value="">Select your fitness level</option>
+                    {FITNESS_LEVELS.map((level) => (
+                      <option key={level.value} value={level.value}>
+                        {level.level}
+                      </option>
                     ))}
-                  </div>
+                  </select>
+                  
+                  <AnimatePresence>
+                    {showLevelDescription && selectedLevel && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute mt-2 p-4 bg-white border border-gray-200 rounded-lg shadow-lg z-10 w-full"
+                      >
+                        <p className="text-sm text-gray-600">{selectedLevel.description}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
+              </div>
 
-                {/* Personal Description Section */}
-                <div className="space-y-4">
-                  <h2 className="text-xl font-semibold text-gray-800">About You</h2>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent h-32"
-                    placeholder="Tell us about your fitness journey, goals, favorite sports..."
+              {/* Physical Limitations Section */}
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold text-gray-800">Physical Limitations</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {PHYSICAL_LIMITATIONS.map((limitation) => (
+                    <motion.div
+                      key={limitation}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={formData.physicalLimitations && formData.physicalLimitations.includes(limitation)}
+                          onChange={() => handleLimitationsChange(limitation)}
+                          className="w-4 h-4 text-[#4A90E2] border-gray-300 rounded focus:ring-[#4A90E2]"
+                        />
+                        <span className="ml-2 text-sm">{limitation}</span>
+                      </label>
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="mt-4">
+                  <label className="text-sm font-medium text-gray-700">Other Limitations</label>
+                  <input
+                    type="text"
+                    value={formData.otherLimitations || ""}
+                    onChange={(e) => setFormData(prev => ({ ...prev, otherLimitations: e.target.value }))}
+                    className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                    placeholder="Enter any other physical limitations..."
                   />
                 </div>
+              </div>
 
-                {/* Error Message */}
-                <AnimatePresence>
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="flex items-center gap-2 p-4 bg-red-50 text-red-600 rounded-lg"
+              {/* Equipment Section */}
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold text-gray-800">Available Equipment</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {AVAILABLE_EQUIPMENT.map((equipment) => (
+                    <motion.button
+                      key={equipment.name}
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleEquipmentToggle(equipment.name)}
+                      className={`p-4 rounded-lg border ${
+                        formData.equipment && formData.equipment.includes(equipment.name)
+                          ? 'border-[#4A90E2] bg-[#E8F4FF]'
+                          : 'border-gray-200 hover:bg-gray-50'
+                      } transition-colors duration-200`}
                     >
-                      <AlertCircle className="w-5 h-5" />
-                      {error}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <div className="text-2xl mb-2">{equipment.icon}</div>
+                      <div className="text-sm font-medium">{equipment.name}</div>
+                      <div className="text-xs text-gray-500">{equipment.category}</div>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
 
-                {/* Action Buttons */}
-                <div className="flex justify-end gap-4">
+              {/* Personal Description Section */}
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold text-gray-800">About You</h2>
+                <textarea
+                  value={formData.description || ""}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent h-32"
+                  placeholder="Tell us about your fitness journey, goals, favorite sports..."
+                />
+              </div>
+
+              {/* Error Message */}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="flex items-center gap-2 p-4 bg-red-50 text-red-600 rounded-lg"
+                  >
+                    <AlertCircle className="w-5 h-5" />
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileForm(false)}
+                  className="px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
+                >
+                  <Save className="w-5 h-5" />
+                  {editingProfile ? 'Update Profile' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            >
+              <motion.div
+                initial={{ scale: 0.95 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.95 }}
+                className="bg-white rounded-lg p-6 max-w-sm w-full"
+              >
+                <h3 className="text-lg font-semibold mb-2">Delete Profile</h3>
+                <p className="text-gray-600 mb-4">
+                  Are you sure you want to delete the profile for {profileToDelete?.name}? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
                   <button
-                    type="button"
-                    onClick={() => setShowProfileForm(false)}
-                    className="px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    type="submit"
-                    className="flex items-center gap-2 px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
+                    onClick={confirmDeleteProfile}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                   >
-                    <Save className="w-5 h-5" />
-                    {editingProfile ? 'Update Profile' : 'Save Profile'}
+                    Delete
                   </button>
                 </div>
-              </form>
+              </motion.div>
             </motion.div>
           )}
-
-          {/* Delete Confirmation Modal */}
-          <AnimatePresence>
-            {showDeleteConfirm && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-              >
-                <motion.div
-                  initial={{ scale: 0.95 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0.95 }}
-                  className="bg-white rounded-lg p-6 max-w-sm w-full"
-                >
-                  <h3 className="text-lg font-semibold mb-2">Delete Profile</h3>
-                  <p className="text-gray-600 mb-4">
-                    Are you sure you want to delete the profile for {profileToDelete?.name}? This action cannot be undone.
-                  </p>
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={confirmDeleteProfile}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        </AnimatePresence>
       </div>
-    );
+    </div>
+  );
 };
 
 export default ProfileManager;
