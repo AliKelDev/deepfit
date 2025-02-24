@@ -1,6 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChefHat, Save, AlertCircle, Check, MessageSquare, Plus, Edit, Trash2, UserCircle } from 'lucide-react';
+import { 
+  ChefHat, 
+  Save, 
+  AlertCircle, 
+  MessageSquare, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  UserCircle,
+  Camera,
+  X
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const COOKING_LEVELS = [
@@ -38,14 +49,52 @@ const DIETARY_RESTRICTIONS = [
   "No Shellfish", "No Pork"
 ];
 
+const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23B87333'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
+
+// Image processing utilities
+const createThumbnail = (imageUrl, maxWidth = 100, maxHeight = 100) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = imageUrl;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+  });
+};
+
 const ProfileManager = () => {
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  
   const [profiles, setProfiles] = useState([]);
   const [activeProfileId, setActiveProfileId] = useState(null);
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [profileToDelete, setProfileToDelete] = useState(null);
   const [editingProfile, setEditingProfile] = useState(null);
+  const [imageError, setImageError] = useState("");
   
   const [formData, setFormData] = useState({
     id: null,
@@ -55,12 +104,15 @@ const ProfileManager = () => {
     otherRestrictions: "",
     cookingLevel: "",
     appliances: [],
-    description: ""
+    description: "",
+    profileImage: DEFAULT_AVATAR,
+    profileThumbnail: DEFAULT_AVATAR
   });
 
   const [showLevelDescription, setShowLevelDescription] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [error, setError] = useState("");
+  const [previewImage, setPreviewImage] = useState(null);
 
   // Load saved profiles on mount
   useEffect(() => {
@@ -100,14 +152,18 @@ const ProfileManager = () => {
       otherRestrictions: "",
       cookingLevel: "",
       appliances: [],
-      description: ""
+      description: "",
+      profileImage: DEFAULT_AVATAR,
+      profileThumbnail: DEFAULT_AVATAR
     });
+    setPreviewImage(null);
     setEditingProfile(null);
     setShowProfileForm(true);
   };
 
   const handleEditProfile = (profile) => {
     setFormData(profile);
+    setPreviewImage(profile.profileImage);
     setEditingProfile(profile);
     setShowProfileForm(true);
   };
@@ -125,6 +181,43 @@ const ProfileManager = () => {
     }
     setShowDeleteConfirm(false);
     setProfileToDelete(null);
+  };
+
+  const handleImageSelect = async (e) => {
+    const file = e.target.files[0];
+    setImageError("");
+    
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setImageError("Please select an image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setImageError("Image size should be less than 5MB");
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const fullImage = e.target.result;
+        const thumbnail = await createThumbnail(fullImage);
+        
+        setFormData(prev => ({
+          ...prev,
+          profileImage: fullImage,
+          profileThumbnail: thumbnail
+        }));
+        
+        setPreviewImage(fullImage);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      setImageError("Error processing image");
+      console.error("Image processing error:", error);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -178,6 +271,38 @@ const ProfileManager = () => {
     }));
   };
 
+  const ProfileImage = ({ src, size = "large", editable = false }) => {
+    const sizeClasses = {
+      small: "w-10 h-10",
+      medium: "w-16 h-16",
+      large: "w-24 h-24"
+    };
+
+    return (
+      <div className="relative inline-block">
+        <div className={`${sizeClasses[size]} rounded-full overflow-hidden bg-gray-100 border-2 border-[#B87333]`}>
+          <img
+            src={src || DEFAULT_AVATAR}
+            alt="Profile"
+            className="w-full h-full object-cover"
+          />
+        </div>
+        {editable && (
+          <button
+            type="button" // Add this to prevent form submission
+            onClick={(e) => {
+              e.preventDefault(); // Add this to prevent any event bubbling
+              fileInputRef.current?.click();
+            }}
+            className="absolute bottom-0 right-0 p-1.5 bg-[#B87333] rounded-full text-white hover:bg-[#A66323] transition-colors"
+          >
+            <Camera className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#FFF5EB] to-[#FFF0E0] py-12 px-4">
       <div className="max-w-4xl mx-auto">
@@ -228,26 +353,29 @@ const ProfileManager = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <h3 className="text-lg font-semibold text-gray-800">
-                              {profile.name}
-                            </h3>
-                            {profile.id === activeProfileId && (
-                              <span className="px-2 py-1 text-xs bg-[#B87333] text-white rounded-full">
-                                Active
-                              </span>
+                        <div className="flex items-center gap-4">
+                          <ProfileImage src={profile.profileThumbnail} size="medium" />
+                          <div>
+                            <div className="flex items-center gap-3">
+                              <h3 className="text-lg font-semibold text-gray-800">
+                                {profile.name}
+                              </h3>
+                              {profile.id === activeProfileId && (
+                                <span className="px-2 py-1 text-xs bg-[#B87333] text-white rounded-full">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {COOKING_LEVELS.find(level => level.value === profile.cookingLevel)?.level} Chef
+                              • Age {profile.age}
+                            </p>
+                            {profile.dietaryRestrictions.length > 0 && (
+                              <p className="text-sm text-gray-500 mt-1">
+                                Dietary: {profile.dietaryRestrictions.join(', ')}
+                              </p>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {COOKING_LEVELS.find(level => level.value === profile.cookingLevel)?.level} Chef
-                            • Age {profile.age}
-                          </p>
-                          {profile.dietaryRestrictions.length > 0 && (
-                            <p className="text-sm text-gray-500 mt-1">
-                              Dietary: {profile.dietaryRestrictions.join(', ')}
-                            </p>
-                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <button
@@ -311,6 +439,31 @@ const ProfileManager = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-8">
+              {/* Profile Picture Section */}
+              <div className="flex flex-col items-center space-y-4">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                
+                <ProfileImage 
+                  src={previewImage || formData.profileImage} 
+                  size="large"
+                  editable={true}
+                />
+                
+                {imageError && (
+                  <p className="text-red-500 text-sm">{imageError}</p>
+                )}
+                
+                <p className="text-sm text-gray-500">
+                  Click the camera icon to upload a profile picture
+                </p>
+              </div>
+
               {/* Basic Info Section */}
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold text-gray-800">Basic Information</h2>

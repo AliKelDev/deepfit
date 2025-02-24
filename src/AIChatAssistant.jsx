@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, X, Send, ImagePlus, XCircle, Plus, Menu, Trash2, MessageSquare, UserCircle, ChefHat, ArrowRight } from 'lucide-react';
+import {
+  Loader2, X, Send, ImagePlus, XCircle, Plus, Menu,
+  Trash2, MessageSquare, UserCircle, ChefHat, ArrowRight, Camera
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23B87333'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
 
 const thinkingMessages = [
   "Let me cook up something special...",
@@ -11,15 +16,33 @@ const thinkingMessages = [
   "Simmering on that thought..."
 ];
 
+const ProfilePicture = ({ src, size = "medium", className = "" }) => {
+  const sizeClasses = {
+    small: "w-8 h-8",
+    medium: "w-10 h-10",
+    large: "w-12 h-12"
+  };
+
+  return (
+    <div className={`${sizeClasses[size]} rounded-full overflow-hidden border-2 border-[#B87333] ${className}`}>
+      <img
+        src={src || DEFAULT_AVATAR}
+        alt="Profile"
+        className="w-full h-full object-cover"
+      />
+    </div>
+  );
+};
+
 const NoProfileScreen = ({ onNavigateToProfile }) => {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#FFF5EB] to-[#FFF0E0] p-4"
     >
-      <motion.div 
+      <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -35,8 +58,8 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
             <UserCircle className="w-12 h-12 text-[#B87333]" />
           </div>
         </motion.div>
-        
-        <motion.h1 
+
+        <motion.h1
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.6 }}
@@ -44,8 +67,8 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
         >
           Welcome to Auguste
         </motion.h1>
-        
-        <motion.p 
+
+        <motion.p
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.8 }}
@@ -53,7 +76,7 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
         >
           Before we start your culinary journey, let's create your chef profile to personalize your experience.
         </motion.p>
-        
+
         <motion.button
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -73,13 +96,13 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
 
 const WelcomeScreen = ({ onStartConversation }) => {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#FFF5EB] to-[#FFF0E0] p-4"
     >
-      <motion.div 
+      <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -95,8 +118,8 @@ const WelcomeScreen = ({ onStartConversation }) => {
             <ChefHat className="w-12 h-12 text-[#B87333]" />
           </div>
         </motion.div>
-        
-        <motion.h1 
+
+        <motion.h1
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.6 }}
@@ -104,8 +127,8 @@ const WelcomeScreen = ({ onStartConversation }) => {
         >
           Welcome to Your Culinary Journey
         </motion.h1>
-        
-        <motion.p 
+
+        <motion.p
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.8 }}
@@ -113,7 +136,7 @@ const WelcomeScreen = ({ onStartConversation }) => {
         >
           I'm Auguste, your personal AI chef. Let me help you discover amazing recipes, learn cooking techniques, and create memorable dining experiences.
         </motion.p>
-        
+
         <motion.button
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -132,13 +155,14 @@ const WelcomeScreen = ({ onStartConversation }) => {
 
 const AIChatAssistant = () => {
   const navigate = useNavigate();
-  
+  const fileInputRef = useRef(null);
+
   // Profile-specific states
   const [hasProfile, setHasProfile] = useState(false);
   const [activeProfile, setActiveProfile] = useState(null);
   const [profileConversations, setProfileConversations] = useState({});
   const [activeConversationId, setActiveConversationId] = useState(null);
-  
+
   // UI states
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -151,10 +175,9 @@ const AIChatAssistant = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [canSend, setCanSend] = useState(true);
   const [isFirstTime, setIsFirstTime] = useState(true);
-  
+
   const lastRequestTime = useRef(0);
   const REQUEST_COOLDOWN = 2000;
-  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const handleNavigateToProfile = () => {
@@ -172,17 +195,17 @@ const AIChatAssistant = () => {
     setHasProfile(true);
     const profile = JSON.parse(userProfile);
     setActiveProfile(profile);
-    
+
     const hasStarted = localStorage.getItem(`profile_${profile.id}_hasStarted`);
     setIsFirstTime(!hasStarted);
-    
+
     if (hasStarted) {
       // Load profile-specific conversations
       const profileChats = localStorage.getItem(`profile_${profile.id}_conversations`);
       if (profileChats) {
         const chats = JSON.parse(profileChats);
         setProfileConversations(chats);
-        
+
         // Set active conversation
         const lastActiveId = localStorage.getItem(`profile_${profile.id}_activeConversation`);
         if (lastActiveId && chats[lastActiveId]) {
@@ -317,9 +340,9 @@ const AIChatAssistant = () => {
         lastUpdated: Date.now()
       }
     }));
-    
+
     setCurrentMessage('');
-    
+
     if (selectedImage) {
       clearSelectedImage();
     }
@@ -339,7 +362,7 @@ const AIChatAssistant = () => {
 
       const data = await response.json();
       const aiResponse = `${data.content}\n\n_— Auguste_`;
-      
+
       // Update conversation with AI response
       setProfileConversations(prev => ({
         ...prev,
@@ -377,7 +400,7 @@ const AIChatAssistant = () => {
     }
   };
 
-  const generateThinkingMessage = () => 
+  const generateThinkingMessage = () =>
     thinkingMessages[Math.floor(Math.random() * thinkingMessages.length)];
 
   return (
@@ -392,30 +415,6 @@ const AIChatAssistant = () => {
           animate={{ opacity: 1 }}
           className="fixed inset-0 flex bg-gradient-to-b from-[#FFF5EB] to-[#FFF0E0]"
         >
-          {/* Mobile Overlay Background with Button */}
-          <AnimatePresence>
-            {isSidebarOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden flex"
-                onClick={() => setIsSidebarOpen(false)}
-              >
-                {/* Right side button area */}
-                <div className="ml-72 flex-1 flex items-center justify-center">
-                  <button 
-                    onClick={() => setIsSidebarOpen(false)}
-                    className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg py-2 px-4 flex items-center gap-2 text-sm"
-                  >
-                    <X className="w-4 h-4 text-white" />
-                    <span className="text-white font-medium">Close</span>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Sidebar with profile info and conversations */}
           <AnimatePresence>
             {(isSidebarOpen || window.innerWidth >= 1024) && (
@@ -430,7 +429,10 @@ const AIChatAssistant = () => {
                 {activeProfile && (
                   <div className="p-4 border-b border-[#E5D3B3] bg-[#FFF5EB]">
                     <div className="flex items-center gap-3">
-                      <UserCircle className="w-8 h-8 text-[#B87333]" />
+                      <ProfilePicture
+                        src={activeProfile.profileThumbnail}
+                        size="medium"
+                      />
                       <div className="flex-1 min-w-0">
                         <h2 className="font-semibold text-gray-800 truncate">
                           {activeProfile.name}
@@ -515,6 +517,30 @@ const AIChatAssistant = () => {
               </div>
             </div>
 
+            {/* Mobile Overlay Background with Button */}
+            <AnimatePresence>
+              {isSidebarOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden flex"
+                  onClick={() => setIsSidebarOpen(false)}
+                >
+                  {/* Right side button area */}
+                  <div className="ml-72 flex-1 flex items-center justify-center">
+                    <button
+                      onClick={() => setIsSidebarOpen(false)}
+                      className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg py-2 px-4 flex items-center gap-2 text-sm"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                      <span className="text-white font-medium">Close</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {activeConversationId &&
@@ -538,8 +564,18 @@ const AIChatAssistant = () => {
                         : 'bg-[#FFF5EB] border border-[#E5D3B3] mr-12'
                     } ${message.isError ? 'bg-red-50 border border-red-200' : ''}`}>
                       <div className="flex items-center gap-2 mb-2">
-                        {message.type === 'ai' && <span className="text-[#B87333] text-lg">👨‍🍳</span>}
-                        <span className="text-sm font-medium text-gray-800">
+                        {message.type === 'ai' ? (
+                          <span className="text-[#B87333] text-lg">👨‍🍳</span>
+                        ) : (
+                          <ProfilePicture
+                            src={activeProfile?.profileThumbnail}
+                            size="small"
+                            className="ml-auto order-2"
+                          />
+                        )}
+                        <span className={`text-sm font-medium text-gray-800 ${
+                          message.type === 'user' ? 'order-1' : ''
+                        }`}>
                           {message.type === 'user' ? activeProfile?.name || 'You' : 'Auguste'}
                         </span>
                       </div>
@@ -573,7 +609,7 @@ const AIChatAssistant = () => {
             <div className="border-t border-[#E5D3B3] p-4 bg-white">
               {previewUrl && (
                 <AnimatePresence>
-                  <motion.div 
+                  <motion.div
                     className="mb-4"
                     initial={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
@@ -673,7 +709,7 @@ const AIChatAssistant = () => {
                         setProfileConversations(prev => {
                           const newConversations = { ...prev };
                           delete newConversations[conversationToDelete];
-                          
+
                           // If we're deleting the active conversation, switch to another one
                           if (conversationToDelete === activeConversationId) {
                             const remainingIds = Object.keys(newConversations);
@@ -683,7 +719,7 @@ const AIChatAssistant = () => {
                               createNewConversation();
                             }
                           }
-                          
+
                           return newConversations;
                         });
                         setShowDeleteModal(false);
