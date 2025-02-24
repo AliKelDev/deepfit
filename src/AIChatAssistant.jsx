@@ -2,18 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2, X, Send, ImagePlus, XCircle, Plus, Menu,
-  Trash2, MessageSquare, UserCircle, ChefHat, ArrowRight, Camera
+  Trash2, MessageSquare, UserCircle, Dumbbell, ArrowRight, Camera
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23B87333'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
+const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%234A90E2'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
 
 const thinkingMessages = [
-  "Let me cook up something special...",
-  "Analyzing your request...",
-  "Consulting my culinary knowledge...",
+  "Analyzing your workout needs...",
+  "Planning your next move...",
+  "Checking training protocols...",
   "Preparing your response...",
-  "Simmering on that thought..."
+  "Getting your fitness plan ready..."
 ];
 
 const ProfilePicture = ({ src, size = "medium", className = "" }) => {
@@ -24,7 +24,7 @@ const ProfilePicture = ({ src, size = "medium", className = "" }) => {
   };
 
   return (
-    <div className={`${sizeClasses[size]} rounded-full overflow-hidden border-2 border-[#B87333] ${className}`}>
+    <div className={`${sizeClasses[size]} rounded-full overflow-hidden border-2 border-[#4A90E2] ${className}`}>
       <img
         src={src || DEFAULT_AVATAR}
         alt="Profile"
@@ -40,7 +40,7 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#FFF5EB] to-[#FFF0E0] p-4"
+      className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#E8F4FF] to-[#D1E8FF] p-4"
     >
       <motion.div
         initial={{ y: 20, opacity: 0 }}
@@ -54,8 +54,8 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
           transition={{ delay: 0.4 }}
           className="mb-6"
         >
-          <div className="w-20 h-20 bg-[#FFF5EB] rounded-full mx-auto flex items-center justify-center">
-            <UserCircle className="w-12 h-12 text-[#B87333]" />
+          <div className="w-20 h-20 bg-[#E8F4FF] rounded-full mx-auto flex items-center justify-center">
+            <UserCircle className="w-12 h-12 text-[#4A90E2]" />
           </div>
         </motion.div>
 
@@ -65,7 +65,7 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
           transition={{ delay: 0.6 }}
           className="text-2xl font-bold text-gray-800 mb-4"
         >
-          Welcome to Auguste
+          Welcome to Max
         </motion.h1>
 
         <motion.p
@@ -74,7 +74,7 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
           transition={{ delay: 0.8 }}
           className="text-gray-600 mb-8"
         >
-          Before we start your culinary journey, let's create your chef profile to personalize your experience.
+          Before we start your fitness journey, let's create your athlete profile to personalize your experience.
         </motion.p>
 
         <motion.button
@@ -84,7 +84,7 @@ const NoProfileScreen = ({ onNavigateToProfile }) => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onNavigateToProfile}
-          className="bg-[#B87333] text-white px-8 py-3 rounded-lg font-medium hover:bg-[#A66323] transition-colors shadow-md flex items-center justify-center gap-2 mx-auto"
+          className="bg-[#4A90E2] text-white px-8 py-3 rounded-lg font-medium hover:bg-[#357ABD] transition-colors shadow-md flex items-center justify-center gap-2 mx-auto"
         >
           Create Your Profile
           <ArrowRight className="w-5 h-5" />
@@ -100,7 +100,7 @@ const WelcomeScreen = ({ onStartConversation }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#FFF5EB] to-[#FFF0E0] p-4"
+      className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#E8F4FF] to-[#D1E8FF] p-4"
     >
       <motion.div
         initial={{ y: 20, opacity: 0 }}
@@ -114,8 +114,8 @@ const WelcomeScreen = ({ onStartConversation }) => {
           transition={{ delay: 0.4 }}
           className="mb-6"
         >
-          <div className="w-20 h-20 bg-[#FFF5EB] rounded-full mx-auto flex items-center justify-center">
-            <ChefHat className="w-12 h-12 text-[#B87333]" />
+          <div className="w-20 h-20 bg-[#E8F4FF] rounded-full mx-auto flex items-center justify-center">
+            <Dumbbell className="w-12 h-12 text-[#4A90E2]" />
           </div>
         </motion.div>
 
@@ -125,7 +125,7 @@ const WelcomeScreen = ({ onStartConversation }) => {
           transition={{ delay: 0.6 }}
           className="text-2xl font-bold text-gray-800 mb-4"
         >
-          Welcome to Your Culinary Journey
+          Welcome to Your Fitness Journey
         </motion.h1>
 
         <motion.p
@@ -134,7 +134,7 @@ const WelcomeScreen = ({ onStartConversation }) => {
           transition={{ delay: 0.8 }}
           className="text-gray-600 mb-8"
         >
-          I'm Auguste, your personal AI chef. Let me help you discover amazing recipes, learn cooking techniques, and create memorable dining experiences.
+          I'm Max, your personal AI fitness coach. Let me help you discover workout routines, learn proper techniques, and achieve your fitness goals.
         </motion.p>
 
         <motion.button
@@ -144,9 +144,9 @@ const WelcomeScreen = ({ onStartConversation }) => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onStartConversation}
-          className="bg-[#B87333] text-white px-8 py-3 rounded-lg font-medium hover:bg-[#A66323] transition-colors shadow-md"
+          className="bg-[#4A90E2] text-white px-8 py-3 rounded-lg font-medium hover:bg-[#357ABD] transition-colors shadow-md"
         >
-          Start Cooking Together
+          Start Training Together
         </motion.button>
       </motion.div>
     </motion.div>
@@ -248,7 +248,7 @@ const AIChatAssistant = () => {
 
   const createNewConversation = () => {
     const newId = `conv-${Date.now()}`;
-    const welcomeMessage = `**Bonjour ${activeProfile?.name}!** What can I help you with today?`;
+    const welcomeMessage = `**Hey ${activeProfile?.name}!** Ready to crush your fitness goals? What can I help you with today?`;
 
     const newConversation = {
       id: newId,
@@ -361,8 +361,7 @@ const AIChatAssistant = () => {
       if (!response.ok) throw new Error('Chat request failed');
 
       const data = await response.json();
-      const aiResponse = `${data.content}\n\n_— Auguste_`;
-
+      const aiResponse = `${data.content}\n\n_— Max_`;
       // Update conversation with AI response
       setProfileConversations(prev => ({
         ...prev,
@@ -386,7 +385,7 @@ const AIChatAssistant = () => {
           messages: [...prev[activeConversationId].messages, {
             id: Date.now(),
             type: 'ai',
-            content: "⚠️ Mon dieu! I'm having trouble connecting. Please try again later!",
+            content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
             isError: true
           }],
           lastUpdated: Date.now()
@@ -413,7 +412,7 @@ const AIChatAssistant = () => {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 flex bg-gradient-to-b from-[#FFF5EB] to-[#FFF0E0]"
+          className="fixed inset-0 flex bg-gradient-to-b from-[#E8F4FF] to-[#D1E8FF]"
         >
           {/* Sidebar with profile info and conversations */}
           <AnimatePresence>
@@ -423,11 +422,11 @@ const AIChatAssistant = () => {
                 animate={{ x: 0 }}
                 exit={{ x: -300 }}
                 transition={{ type: "spring", damping: 20 }}
-                className="fixed left-0 top-0 bottom-0 w-72 bg-white border-r border-[#E5D3B3] flex flex-col z-30 lg:relative lg:translate-x-0"
+                className="fixed left-0 top-0 bottom-0 w-72 bg-white border-r border-[#B8D8F8] flex flex-col z-30 lg:relative lg:translate-x-0"
               >
                 {/* Profile Info */}
                 {activeProfile && (
-                  <div className="p-4 border-b border-[#E5D3B3] bg-[#FFF5EB]">
+                  <div className="p-4 border-b border-[#B8D8F8] bg-[#E8F4FF]">
                     <div className="flex items-center gap-3">
                       <ProfilePicture
                         src={activeProfile.profileThumbnail}
@@ -438,7 +437,7 @@ const AIChatAssistant = () => {
                           {activeProfile.name}
                         </h2>
                         <p className="text-sm text-gray-600">
-                          Level {activeProfile.cookingLevel} Chef
+                          Level {activeProfile.cookingLevel} Athlete
                         </p>
                       </div>
                     </div>
@@ -452,8 +451,8 @@ const AIChatAssistant = () => {
                     .map(conversation => (
                       <div
                         key={conversation.id}
-                        className={`p-3 border-b border-[#E5D3B3] cursor-pointer hover:bg-[#FFF5EB] flex items-center justify-between transition-colors ${
-                          conversation.id === activeConversationId ? 'bg-[#FFF0E0]' : ''
+                        className={`p-3 border-b border-[#B8D8F8] cursor-pointer hover:bg-[#E8F4FF] flex items-center justify-between transition-colors ${
+                          conversation.id === activeConversationId ? 'bg-[#D1E8FF]' : ''
                         }`}
                         onClick={() => {
                           setActiveConversationId(conversation.id);
@@ -461,7 +460,7 @@ const AIChatAssistant = () => {
                         }}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <MessageSquare className="w-5 h-5 text-[#B87333] flex-shrink-0" />
+                          <MessageSquare className="w-5 h-5 text-[#4A90E2] flex-shrink-0" />
                           <div className="truncate">
                             <div className="font-medium text-gray-800 truncate">
                               {conversation.title}
@@ -478,9 +477,9 @@ const AIChatAssistant = () => {
                               setConversationToDelete(conversation.id);
                               setShowDeleteModal(true);
                             }}
-                            className="p-1 hover:bg-[#FFF0E0] rounded transition-colors"
+                            className="p-1 hover:bg-[#D1E8FF] rounded transition-colors"
                           >
-                            <Trash2 className="w-4 h-4 text-[#B87333]" />
+                            <Trash2 className="w-4 h-4 text-[#4A90E2]" />
                           </button>
                         )}
                       </div>
@@ -488,10 +487,10 @@ const AIChatAssistant = () => {
                 </div>
 
                 {/* New Conversation Button */}
-                <div className="p-4 border-t border-[#E5D3B3]">
+                <div className="p-4 border-t border-[#B8D8F8]">
                   <button
                     onClick={createNewConversation}
-                    className="w-full flex items-center justify-center gap-2 p-2 bg-[#B87333] text-white rounded-lg hover:bg-[#A66323] transition-colors"
+                    className="w-full flex items-center justify-center gap-2 p-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
                   >
                     <Plus className="w-5 h-5" />
                     New Conversation
@@ -504,16 +503,16 @@ const AIChatAssistant = () => {
           {/* Chat Area */}
           <div className="flex-1 flex flex-col relative">
             {/* Chat Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#E5D3B3] bg-white">
+            <div className="flex items-center justify-between p-4 border-b border-[#B8D8F8] bg-white">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className="p-2 hover:bg-[#FFF5EB] rounded-lg transition-colors"
+                  className="p-2 hover:bg-[#E8F4FF] rounded-lg transition-colors"
                 >
-                  <Menu className="w-5 h-5 text-[#B87333]" />
+                  <Menu className="w-5 h-5 text-[#4A90E2]" />
                 </button>
-                <span className="text-[#B87333] text-xl">👨‍🍳</span>
-                <h3 className="font-semibold text-gray-800">Auguste - Your Personal Chef</h3>
+                <span className="text-[#4A90E2] text-xl">💪</span>
+                <h3 className="font-semibold text-gray-800">Max - Your Personal Coach</h3>
               </div>
             </div>
 
@@ -540,7 +539,6 @@ const AIChatAssistant = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {activeConversationId &&
@@ -560,12 +558,12 @@ const AIChatAssistant = () => {
                     )}
                     <div className={`max-w-2xl p-4 rounded-xl ${
                       message.type === 'user'
-                        ? 'bg-white border border-[#E5D3B3] ml-12'
-                        : 'bg-[#FFF5EB] border border-[#E5D3B3] mr-12'
+                        ? 'bg-white border border-[#B8D8F8] ml-12'
+                        : 'bg-[#E8F4FF] border border-[#B8D8F8] mr-12'
                     } ${message.isError ? 'bg-red-50 border border-red-200' : ''}`}>
                       <div className="flex items-center gap-2 mb-2">
                         {message.type === 'ai' ? (
-                          <span className="text-[#B87333] text-lg">👨‍🍳</span>
+                          <span className="text-[#4A90E2] text-lg">💪</span>
                         ) : (
                           <ProfilePicture
                             src={activeProfile?.profileThumbnail}
@@ -576,13 +574,13 @@ const AIChatAssistant = () => {
                         <span className={`text-sm font-medium text-gray-800 ${
                           message.type === 'user' ? 'order-1' : ''
                         }`}>
-                          {message.type === 'user' ? activeProfile?.name || 'You' : 'Auguste'}
+                          {message.type === 'user' ? activeProfile?.name || 'You' : 'Max'}
                         </span>
                       </div>
                       <div className={`whitespace-pre-wrap ${message.isError ? 'text-red-600' : 'text-gray-700'}`}>
                         {message.content.split(/(\*\*.*?\*\*)/g).map((part, index) =>
                           part.startsWith('**') && part.endsWith('**') ? (
-                            <strong key={index} className="font-semibold text-[#B87333]">{part.slice(2, -2)}</strong>
+                            <strong key={index} className="font-semibold text-[#4A90E2]">{part.slice(2, -2)}</strong>
                           ) : (
                             <span key={index}>{part}</span>
                           )
@@ -598,7 +596,7 @@ const AIChatAssistant = () => {
                   animate={{ opacity: 1 }}
                   className="flex items-center gap-2 text-gray-600 p-4"
                 >
-                  <Loader2 className="w-5 h-5 animate-spin text-[#B87333]" />
+                  <Loader2 className="w-5 h-5 animate-spin text-[#4A90E2]" />
                   <span>{generateThinkingMessage()}</span>
                 </motion.div>
               )}
@@ -606,7 +604,7 @@ const AIChatAssistant = () => {
             </div>
 
             {/* Input Area with Image Preview */}
-            <div className="border-t border-[#E5D3B3] p-4 bg-white">
+            <div className="border-t border-[#B8D8F8] p-4 bg-white">
               {previewUrl && (
                 <AnimatePresence>
                   <motion.div
@@ -623,14 +621,14 @@ const AIChatAssistant = () => {
                       />
                       <button
                         onClick={clearSelectedImage}
-                        className="absolute -top-2 -right-2 bg-white rounded-full shadow-md hover:bg-[#FFF5EB] transition-colors"
+                        className="absolute -top-2 -right-2 bg-white rounded-full shadow-md hover:bg-[#E8F4FF] transition-colors"
                       >
-                        <XCircle className="w-5 h-5 text-[#B87333]" />
+                        <XCircle className="w-5 h-5 text-[#4A90E2]" />
                       </button>
                     </div>
                     {isAnalyzing && (
                       <div className="mt-2 text-sm text-gray-600 flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-[#B87333]" />
+                        <Loader2 className="w-4 h-4 animate-spin text-[#4A90E2]" />
                         Analyzing image...
                       </div>
                     )}
@@ -648,7 +646,7 @@ const AIChatAssistant = () => {
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-3 bg-[#FFF5EB] rounded-lg text-[#B87333] hover:bg-[#FFF0E0] transition-colors"
+                  className="p-3 bg-[#E8F4FF] rounded-lg text-[#4A90E2] hover:bg-[#D1E8FF] transition-colors"
                 >
                   <ImagePlus className="w-5 h-5" />
                 </button>
@@ -656,8 +654,8 @@ const AIChatAssistant = () => {
                 <textarea
                   value={currentMessage}
                   onChange={(e) => setCurrentMessage(e.target.value)}
-                  placeholder="Ask me about recipes or share a food photo..."
-                  className="flex-1 p-3 border border-[#E5D3B3] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B87333] resize-none h-12"
+                  placeholder="Ask about workouts or share a form check video..."
+                  className="flex-1 p-3 border border-[#B8D8F8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A90E2] resize-none h-12"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -668,7 +666,7 @@ const AIChatAssistant = () => {
 
                 <motion.button
                   onClick={handleSendMessage}
-                  className="p-3 bg-[#B87333] rounded-lg text-white shadow-md hover:bg-[#A66323] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-3 bg-[#4A90E2] rounded-lg text-white shadow-md hover:bg-[#357ABD] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   whileTap={{ scale: 0.95 }}
                   disabled={isLoading || (!currentMessage.trim() && !selectedImage)}
                 >
