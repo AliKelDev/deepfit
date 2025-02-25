@@ -238,6 +238,39 @@ const AIChatAssistant = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [profileConversations]);
 
+  // NEW: Check for pending messages when conversations change
+  useEffect(() => {
+    if (activeConversationId && profileConversations[activeConversationId]) {
+      const currentConversation = profileConversations[activeConversationId];
+      const messages = currentConversation.messages || [];
+      
+      // Check if the last message is from the user and has no AI response after it
+      if (messages.length > 0 && 
+          messages[messages.length - 1].type === 'user' && 
+          !messages[messages.length - 1].pendingResponse) {
+        
+        // Find the last message from the user that hasn't been responded to
+        const lastUserMessage = messages[messages.length - 1];
+        
+        // Mark this message as having a pending response to prevent duplicate processing
+        setProfileConversations(prev => ({
+          ...prev,
+          [activeConversationId]: {
+            ...prev[activeConversationId],
+            messages: prev[activeConversationId].messages.map((msg, index) => 
+              index === messages.length - 1 ? { ...msg, pendingResponse: true } : msg
+            )
+          }
+        }));
+        
+        // Wait a short delay to allow the UI to update before sending the message
+        setTimeout(() => {
+          handleAutoSendMessage(lastUserMessage);
+        }, 500);
+      }
+    }
+  }, [activeConversationId, profileConversations]);
+
   const handleStartFirstConversation = () => {
     if (activeProfile) {
       localStorage.setItem(`profile_${activeProfile.id}_hasStarted`, 'true');
@@ -309,6 +342,62 @@ const AIChatAssistant = () => {
     setImageAnalysis('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // NEW: Add function to handle auto-sending messages
+  const handleAutoSendMessage = async (userMessage) => {
+    if (!activeConversationId) return;
+    
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/.netlify/functions/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...profileConversations[activeConversationId].messages],
+          imageAnalysis: userMessage.imageAnalysis || '',
+          userProfile: activeProfile
+        })
+      });
+
+      if (!response.ok) throw new Error('Chat request failed');
+
+      const data = await response.json();
+      const aiResponse = `${data.content}\n\n_— Max_`;
+      
+      // Update conversation with AI response
+      setProfileConversations(prev => ({
+        ...prev,
+        [activeConversationId]: {
+          ...prev[activeConversationId],
+          messages: [...prev[activeConversationId].messages, {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: aiResponse
+          }],
+          lastUpdated: Date.now()
+        }
+      }));
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Add error message to conversation
+      setProfileConversations(prev => ({
+        ...prev,
+        [activeConversationId]: {
+          ...prev[activeConversationId],
+          messages: [...prev[activeConversationId].messages, {
+            id: Date.now(),
+            type: 'ai',
+            content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+            isError: true
+          }],
+          lastUpdated: Date.now()
+        }
+      }));
+    } finally {
+      setIsLoading(false);
     }
   };
 
