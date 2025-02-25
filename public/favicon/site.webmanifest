@@ -1,7 +1,7 @@
 {
-  "name": "ChefGPT - AI-Powered Culinary Assistant",
-  "short_name": "ChefGPT",
-  "description": "Get personalized cooking assistance from Auguste, your Michelin-star AI chef",
+  "name": "DeepFit - AI-Powered Fitness Assistant",
+  "short_name": "DeepFit",
+  "description": "Get personalized fitness assistance from Max, your AI coach",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FFF5EB",
