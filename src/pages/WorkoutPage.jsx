@@ -16,7 +16,8 @@ import {
   RotateCcw,
   Share2,
   Calendar,
-  MessageSquare
+  MessageSquare,
+  ChevronRight
 } from 'lucide-react';
 
 // Exercise database with categories
@@ -93,6 +94,10 @@ const WorkoutPage = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [quickMessage, setQuickMessage] = useState("");
+  
+  // Add these new state variables:
+  const [selectedWorkoutForChat, setSelectedWorkoutForChat] = useState(null);
+  const [workoutSelectOpen, setWorkoutSelectOpen] = useState(false);
 
   // New workout form state
   const [newWorkout, setNewWorkout] = useState({
@@ -151,6 +156,33 @@ const WorkoutPage = () => {
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  // Format workout data to a readable string for Max
+  const formatWorkoutForAI = (workout) => {
+    if (!workout) return "";
+    
+    const startDate = new Date(workout.startTime);
+    let formattedData = `Workout: ${workout.name}\n`;
+    formattedData += `Date: ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
+    formattedData += `Duration: ${formatTime(workout.duration)}\n\n`;
+    
+    workout.exercises.forEach((exercise, index) => {
+      const completedSets = exercise.sets.filter(set => set.completed).length;
+      formattedData += `Exercise ${index + 1}: ${exercise.name} (${completedSets}/${exercise.sets.length} sets completed)\n`;
+      
+      exercise.sets.forEach((set, setIndex) => {
+        const setType = set.type !== 'normal' ? ` (${set.type})` : '';
+        if (set.completed) {
+          formattedData += `  Set ${setIndex + 1}${setType}: ${set.actualWeight}lbs × ${set.actualReps} reps\n`;
+        } else {
+          formattedData += `  Set ${setIndex + 1}${setType}: ${set.weight}lbs × ${set.reps} reps (not completed)\n`;
+        }
+      });
+      formattedData += '\n';
+    });
+    
+    return formattedData;
   };
 
   const handleStartWorkout = (workout) => {
@@ -293,9 +325,10 @@ const WorkoutPage = () => {
     }
   };
 
+  // Modified handleChatWithMax function to include workout data
   const handleChatWithMax = () => {
     // For quick messages, we'll create a function to immediately start a new chat with the message
-    if (quickMessage.trim()) {
+    if (quickMessage.trim() || selectedWorkoutForChat) {
       // Get existing conversations
       const profileId = userProfile?.id;
       if (!profileId) {
@@ -315,8 +348,28 @@ const WorkoutPage = () => {
 
       // Format the workout message
       let workoutInfo = "";
-      if (activeWorkout) {
-        workoutInfo = `I'm currently doing my "${activeWorkout.name}" workout. `;
+      let userMessageContent = quickMessage.trim();
+      
+      if (selectedWorkoutForChat) {
+        // Full workout details for the AI
+        workoutInfo = formatWorkoutForAI(selectedWorkoutForChat);
+        
+        // Special format for the UI to allow collapsing
+        userMessageContent = JSON.stringify({
+          text: quickMessage.trim(),
+          workoutData: {
+            id: selectedWorkoutForChat.id || Date.now().toString(),
+            name: selectedWorkoutForChat.name,
+            date: new Date(selectedWorkoutForChat.startTime).toLocaleDateString(),
+            time: new Date(selectedWorkoutForChat.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            duration: formatTime(selectedWorkoutForChat.duration),
+            exercises: selectedWorkoutForChat.exercises.map(ex => ({
+              name: ex.name,
+              sets: ex.sets.length,
+              completed: ex.sets.filter(set => set.completed).length
+            }))
+          }
+        });
       }
 
       const newConversation = {
@@ -331,7 +384,8 @@ const WorkoutPage = () => {
           {
             id: Date.now(),
             type: 'user',
-            content: workoutInfo + quickMessage
+            content: userMessageContent,
+            workoutShared: !!selectedWorkoutForChat // Flag to identify messages with workouts
           }
         ],
         createdAt: Date.now(),
@@ -341,6 +395,11 @@ const WorkoutPage = () => {
       conversations[newId] = newConversation;
       localStorage.setItem(`profile_${profileId}_conversations`, JSON.stringify(conversations));
       localStorage.setItem(`profile_${profileId}_activeConversation`, newId);
+      
+      // Also send the workout info as context to the AI
+      if (selectedWorkoutForChat) {
+        localStorage.setItem(`workout_context_${newId}`, workoutInfo);
+      }
       
       // Navigate to chat
       navigate('/chat');
@@ -1011,7 +1070,7 @@ const WorkoutPage = () => {
         )}
       </AnimatePresence>
 
-      {/* Quick Chat Modal */}
+      {/* Quick Chat Modal - Updated Version */}
       <AnimatePresence>
         {showChatModal && (
           <motion.div
@@ -1032,11 +1091,142 @@ const WorkoutPage = () => {
                   <h3 className="text-xl font-semibold text-gray-800">Ask Max</h3>
                 </div>
                 
+                {/* Workout Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Share a workout (optional):
+                  </label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setWorkoutSelectOpen(!workoutSelectOpen)}
+                      className="w-full p-3 text-left border border-gray-300 rounded-lg flex justify-between items-center hover:border-[#4A90E2] transition-colors"
+                    >
+                      <span className="text-gray-700">
+                        {selectedWorkoutForChat ? selectedWorkoutForChat.name : 'Select a workout'}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-gray-500" />
+                    </button>
+                    
+                    {/* Workout Dropdown */}
+                    <AnimatePresence>
+                      {workoutSelectOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                        >
+                          <div className="p-2">
+                            <button
+                              className="w-full p-2 text-left hover:bg-gray-50 rounded-md text-gray-500 text-sm"
+                              onClick={() => {
+                                setSelectedWorkoutForChat(null);
+                                setWorkoutSelectOpen(false);
+                              }}
+                            >
+                              No workout
+                            </button>
+                            
+                            {/* Active Workout Option */}
+                            {activeWorkout && (
+                              <button
+                                className="w-full p-2 text-left hover:bg-gray-50 rounded-md flex items-center justify-between"
+                                onClick={() => {
+                                  setSelectedWorkoutForChat(activeWorkout);
+                                  setWorkoutSelectOpen(false);
+                                }}
+                              >
+                                <div>
+                                  <div className="font-medium text-gray-800">{activeWorkout.name}</div>
+                                  <div className="text-xs text-green-600">Current Workout</div>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {formatTime(elapsedTime)}
+                                </div>
+                              </button>
+                            )}
+                            
+                            {/* History Options */}
+                            <div className="text-xs text-gray-500 mt-2 mb-1 px-2">History</div>
+                            {workoutHistory.length === 0 ? (
+                              <div className="text-sm text-gray-500 p-2">No workout history</div>
+                            ) : (
+                              workoutHistory.map((workout, index) => {
+                                const startDate = new Date(workout.startTime);
+                                return (
+                                  <button
+                                    key={index}
+                                    className="w-full p-2 text-left hover:bg-gray-50 rounded-md flex items-center justify-between"
+                                    onClick={() => {
+                                      setSelectedWorkoutForChat(workout);
+                                      setWorkoutSelectOpen(false);
+                                    }}
+                                  >
+                                    <div>
+                                      <div className="font-medium text-gray-800">{workout.name}</div>
+                                      <div className="text-xs text-gray-500">
+                                        {startDate.toLocaleDateString()} at {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {formatTime(workout.duration)}
+                                    </div>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  
+                  {/* Preview Selected Workout */}
+                  <AnimatePresence>
+                    {selectedWorkoutForChat && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-2 border border-gray-200 rounded-lg overflow-hidden"
+                      >
+                        <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
+                          <div className="font-medium text-gray-800">{selectedWorkoutForChat.name}</div>
+                          <button
+                            onClick={() => setSelectedWorkoutForChat(null)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="p-3 text-sm">
+                          <div className="text-gray-500 flex items-center gap-2 mb-2">
+                            <Clock className="w-4 h-4" />
+                            <span>{formatTime(selectedWorkoutForChat.duration)}</span>
+                          </div>
+                          <div className="space-y-1">
+                            {selectedWorkoutForChat.exercises.map((exercise, i) => {
+                              const completedSets = exercise.sets.filter(set => set.completed).length;
+                              return (
+                                <div key={i} className="text-gray-700">
+                                  {exercise.name} ({completedSets}/{exercise.sets.length} sets)
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                
                 <textarea
                   value={quickMessage}
                   onChange={(e) => setQuickMessage(e.target.value)}
                   className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent h-32"
-                  placeholder="Ask a question about your workout or fitness journey..."
+                  placeholder={selectedWorkoutForChat 
+                    ? "Ask about this workout..." 
+                    : "Ask a question about your workout or fitness journey..."}
                 />
                 
                 <div className="mt-4 text-sm text-gray-600">
@@ -1045,16 +1235,22 @@ const WorkoutPage = () => {
                     Quick questions Max can help with:
                   </span>
                   <ul className="ml-6 mt-2 list-disc space-y-1">
-                    <li>How can I modify an exercise if I have knee pain?</li>
-                    <li>What's the right form for bench press?</li>
-                    <li>How many sets should I do for muscle growth?</li>
+                    <li>How can I improve my {selectedWorkoutForChat ? selectedWorkoutForChat.name : "workout"} routine?</li>
+                    <li>What's the right form for {selectedWorkoutForChat && selectedWorkoutForChat.exercises.length > 0 
+                      ? selectedWorkoutForChat.exercises[0].name 
+                      : "bench press"}?</li>
+                    <li>How can I progress with this routine?</li>
                   </ul>
                 </div>
               </div>
               
               <div className="p-6 flex justify-end gap-3">
                 <button
-                  onClick={() => setShowChatModal(false)}
+                  onClick={() => {
+                    setShowChatModal(false);
+                    setSelectedWorkoutForChat(null);
+                    setQuickMessage("");
+                  }}
                   className="px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   Cancel
@@ -1063,8 +1259,11 @@ const WorkoutPage = () => {
                   onClick={() => {
                     handleChatWithMax();
                     setShowChatModal(false);
+                    setSelectedWorkoutForChat(null);
+                    setQuickMessage("");
                   }}
                   className="px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
+                  disabled={!quickMessage.trim() && !selectedWorkoutForChat}
                 >
                   Chat with Max
                 </button>
