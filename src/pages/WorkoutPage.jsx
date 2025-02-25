@@ -298,19 +298,28 @@ const WorkoutPage = () => {
       alert("Please give your workout a name");
       return;
     }
-
+  
     if (newWorkout.exercises.length === 0) {
       alert("Please add at least one exercise to your workout");
       return;
     }
-
+  
     const workoutToSave = {
       ...newWorkout,
       id: Date.now().toString(),
       createdAt: new Date().toISOString()
     };
-
-    setWorkouts(prev => [...prev, workoutToSave]);
+  
+    // First update state
+    const updatedWorkouts = [...workouts, workoutToSave];
+    setWorkouts(updatedWorkouts);
+    
+    // Save to localStorage immediately to avoid race conditions
+    if (userProfile) {
+      localStorage.setItem(`workouts_${userProfile.id}`, JSON.stringify(updatedWorkouts));
+    }
+    
+    // Reset form and switch tabs
     setNewWorkout({
       name: "",
       exercises: [],
