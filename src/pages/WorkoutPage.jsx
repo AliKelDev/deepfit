@@ -334,87 +334,32 @@ const WorkoutPage = () => {
     }
   };
 
-  // Modified handleChatWithMax function to include workout data
+  // UPDATED FUNCTION: Modified handleChatWithMax function to use navigation state
   const handleChatWithMax = () => {
-    // For quick messages, we'll create a function to immediately start a new chat with the message
-    if (quickMessage.trim() || selectedWorkoutForChat) {
-      // Get existing conversations
-      const profileId = userProfile?.id;
-      if (!profileId) {
-        navigate('/profile');
-        return;
-      }
-
-      const profileChats = localStorage.getItem(`profile_${profileId}_conversations`);
-      let conversations = {};
-      if (profileChats) {
-        conversations = JSON.parse(profileChats);
-      }
-
-      // Create a new conversation with the workout-related question
-      const newId = `conv-${Date.now()}`;
-      const welcomeMessage = `**Hey ${userProfile?.name}!** Ready to crush your fitness goals? What can I help you with today?`;
-
-      // Format the workout message
-      let workoutInfo = "";
-      let userMessageContent = quickMessage.trim();
-      
-      if (selectedWorkoutForChat) {
-        // Full workout details for the AI
-        workoutInfo = formatWorkoutForAI(selectedWorkoutForChat);
-        
-        // Special format for the UI to allow collapsing
-        userMessageContent = JSON.stringify({
-          text: quickMessage.trim(),
-          workoutData: {
-            id: selectedWorkoutForChat.id || Date.now().toString(),
-            name: selectedWorkoutForChat.name,
-            date: new Date(selectedWorkoutForChat.startTime).toLocaleDateString(),
-            time: new Date(selectedWorkoutForChat.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            duration: formatTime(selectedWorkoutForChat.duration),
-            exercises: selectedWorkoutForChat.exercises.map(ex => ({
-              name: ex.name,
-              sets: ex.sets.length,
-              completed: ex.sets.filter(set => set.completed).length
-            }))
-          }
-        });
-      }
-
-      const newConversation = {
-        id: newId,
-        title: 'Workout Question',
-        messages: [
-          {
-            id: 'welcome',
-            type: 'ai',
-            content: welcomeMessage
-          },
-          {
-            id: Date.now(),
-            type: 'user',
-            content: userMessageContent,
-            workoutShared: !!selectedWorkoutForChat // Flag to identify messages with workouts
-          }
-        ],
-        createdAt: Date.now(),
-        lastUpdated: Date.now()
-      };
-
-      conversations[newId] = newConversation;
-      localStorage.setItem(`profile_${profileId}_conversations`, JSON.stringify(conversations));
-      localStorage.setItem(`profile_${profileId}_activeConversation`, newId);
-      
-      // Also send the workout info as context to the AI
-      if (selectedWorkoutForChat) {
-        localStorage.setItem(`workout_context_${newId}`, workoutInfo);
-      }
-      
-      // Navigate to chat
-      navigate('/chat');
-    } else {
-      navigate('/chat');
-    }
+    // Prepare data to pass to the chat screen
+    const chatData = {
+      message: quickMessage.trim(),
+      workout: selectedWorkoutForChat ? {
+        name: selectedWorkoutForChat.name,
+        date: new Date(selectedWorkoutForChat.startTime).toLocaleDateString(),
+        time: new Date(selectedWorkoutForChat.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        duration: formatTime(selectedWorkoutForChat.duration),
+        exercises: selectedWorkoutForChat.exercises.map(ex => ({
+          name: ex.name,
+          sets: ex.sets.length,
+          completed: ex.sets.filter(set => set.completed).length
+        }))
+      } : null,
+      workoutDetails: selectedWorkoutForChat ? formatWorkoutForAI(selectedWorkoutForChat) : ""
+    };
+    
+    // Navigate to chat with this data
+    navigate('/chat', { state: chatData });
+    
+    // Reset the modal state
+    setShowChatModal(false);
+    setSelectedWorkoutForChat(null);
+    setQuickMessage("");
   };
 
   // If no profile exists, show redirect to profile creation
@@ -1146,7 +1091,7 @@ const WorkoutPage = () => {
                                 }}
                               >
                                 <div>
-                                  <div className="font-medium text-gray-800">{activeWorkout.name}</div>
+                                <div className="font-medium text-gray-800">{activeWorkout.name}</div>
                                   <div className="text-xs text-green-600">Current Workout</div>
                                 </div>
                                 <div className="text-xs text-gray-500">

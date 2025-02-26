@@ -5,7 +5,7 @@ import {
   Trash2, MessageSquare, UserCircle, Dumbbell, ArrowRight, Camera,
   Clock, ChevronRight
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%234A90E2'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
 
@@ -156,7 +156,11 @@ const WelcomeScreen = ({ onStartConversation }) => {
 
 const AIChatAssistant = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef(null);
+
+  // For receiving workout messages from workout page
+  const [initialMessage, setInitialMessage] = useState('');
 
   // Profile-specific states
   const [hasProfile, setHasProfile] = useState(false);
@@ -181,6 +185,28 @@ const AIChatAssistant = () => {
   const lastRequestTime = useRef(0);
   const REQUEST_COOLDOWN = 2000;
   const messagesEndRef = useRef(null);
+
+  // Check for message from workout page
+  useEffect(() => {
+    if (location.state?.message || location.state?.workout) {
+      let message = location.state.message || '';
+      
+      // If there's workout data, format it for display
+      if (location.state.workout) {
+        setInitialMessage(`${message}\n\n[Workout: ${location.state.workout.name}]\n${location.state.workoutDetails}`);
+      } else {
+        setInitialMessage(message);
+      }
+    }
+  }, [location.state]);
+
+  // Set the input field when initialMessage changes
+  useEffect(() => {
+    if (initialMessage) {
+      setCurrentMessage(initialMessage);
+      setInitialMessage(''); // Clear it after using it
+    }
+  }, [initialMessage]);
 
   const handleNavigateToProfile = () => {
     navigate('/profile');
@@ -239,39 +265,6 @@ const AIChatAssistant = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [profileConversations]);
-
-  // NEW: Check for pending messages when conversations change
-  useEffect(() => {
-    if (activeConversationId && profileConversations[activeConversationId]) {
-      const currentConversation = profileConversations[activeConversationId];
-      const messages = currentConversation.messages || [];
-      
-      // Check if the last message is from the user and has no AI response after it
-      if (messages.length > 0 && 
-          messages[messages.length - 1].type === 'user' && 
-          !messages[messages.length - 1].pendingResponse) {
-        
-        // Find the last message from the user that hasn't been responded to
-        const lastUserMessage = messages[messages.length - 1];
-        
-        // Mark this message as having a pending response to prevent duplicate processing
-        setProfileConversations(prev => ({
-          ...prev,
-          [activeConversationId]: {
-            ...prev[activeConversationId],
-            messages: prev[activeConversationId].messages.map((msg, index) => 
-              index === messages.length - 1 ? { ...msg, pendingResponse: true } : msg
-            )
-          }
-        }));
-        
-        // Wait a short delay to allow the UI to update before sending the message
-        setTimeout(() => {
-          handleAutoSendMessage(lastUserMessage);
-        }, 500);
-      }
-    }
-  }, [activeConversationId, profileConversations]);
 
   const handleStartFirstConversation = () => {
     if (activeProfile) {
@@ -347,95 +340,6 @@ const AIChatAssistant = () => {
     }
   };
 
-  // Modified handleAutoSendMessage function to include workout data
-  const handleAutoSendMessage = async (userMessage) => {
-    if (!activeConversationId) return;
-    
-    setIsLoading(true);
-    
-    // Check if there's workout context for this conversation
-    let workoutContext = "";
-    const workoutContextKey = `workout_context_${activeConversationId}`;
-    const storedWorkoutContext = localStorage.getItem(workoutContextKey);
-    if (storedWorkoutContext) {
-      workoutContext = storedWorkoutContext;
-      // Remove it after use to avoid cluttering localStorage
-      localStorage.removeItem(workoutContextKey);
-    }
-
-    try {
-      // Extract text content from workout shared message if needed
-      let messageContent = userMessage.content;
-      if (userMessage.workoutShared && typeof userMessage.content === 'string') {
-        try {
-          const parsedContent = JSON.parse(userMessage.content);
-          if (parsedContent.text) {
-            messageContent = parsedContent.text;
-          }
-        } catch (e) {
-          // Not JSON, use as is
-          console.log("Error parsing workout data", e);
-        }
-      }
-
-      const response = await fetch('/.netlify/functions/ai-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...profileConversations[activeConversationId].messages.map(msg => {
-            // If it's the workout message, replace content with text + workout context
-            if (msg.id === userMessage.id && userMessage.workoutShared) {
-              return {
-                ...msg,
-                content: `${messageContent}\n\nWorkout details:\n${workoutContext}`
-              };
-            }
-            return msg;
-          })],
-          imageAnalysis: userMessage.imageAnalysis || '',
-          userProfile: activeProfile
-        })
-      });
-
-      if (!response.ok) throw new Error('Chat request failed');
-
-      const data = await response.json();
-      const aiResponse = `${data.content}\n\n_— Max_`;
-      
-      // Update conversation with AI response
-      setProfileConversations(prev => ({
-        ...prev,
-        [activeConversationId]: {
-          ...prev[activeConversationId],
-          messages: [...prev[activeConversationId].messages, {
-            id: Date.now() + 1,
-            type: 'ai',
-            content: aiResponse
-          }],
-          lastUpdated: Date.now()
-        }
-      }));
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Add error message to conversation
-      setProfileConversations(prev => ({
-        ...prev,
-        [activeConversationId]: {
-          ...prev[activeConversationId],
-          messages: [...prev[activeConversationId].messages, {
-            id: Date.now(),
-            type: 'ai',
-            content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
-            isError: true
-          }],
-          lastUpdated: Date.now()
-        }
-      }));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSendMessage = async () => {
     if (!canSend || (!currentMessage.trim() && !selectedImage) || !activeConversationId) return;
 
@@ -448,11 +352,13 @@ const AIChatAssistant = () => {
     setIsLoading(true);
     setCanSend(false);
 
+    // Added pendingResponse flag to prevent duplicate sending
     const userMessage = {
       id: Date.now(),
       type: 'user',
       content: currentMessage,
       imageUrl: previewUrl,
+      pendingResponse: true
     };
 
     // Update conversation with user message
