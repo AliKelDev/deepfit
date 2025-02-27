@@ -624,65 +624,82 @@ const WorkoutPage = () => {
                             </div>
                             <div className="p-4">
                               <div className="mb-4">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="text-left text-gray-600">
-                                      <th className="pb-2">Set</th>
-                                      <th className="pb-2">Weight</th>
-                                      <th className="pb-2">Reps</th>
-                                      <th className="pb-2">Type</th>
-                                      <th className="pb-2"></th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {exercise.sets.map((set, setIndex) => (
-                                      <tr key={setIndex}>
-                                        <td className="py-2">{setIndex + 1}</td>
-                                        <td className="py-2">
-                                          <div className="flex items-center">
-                                            <input
-                                              type="number"
-                                              min="0"
-                                              value={set.weight}
-                                              onChange={(e) => handleSetChange(exerciseIndex, setIndex, 'weight', e.target.value)}
-                                              className="w-16 p-2 border border-gray-300 rounded"
-                                            />
-                                            <span className="ml-1 text-gray-500 text-xs">{weightUnit}</span>
-                                          </div>
-                                        </td>
-                                        <td className="py-2">
-                                          <input
-                                            type="number"
-                                            min="1"
-                                            value={set.reps}
-                                            onChange={(e) => handleSetChange(exerciseIndex, setIndex, 'reps', e.target.value)}
-                                            className="w-16 p-2 border border-gray-300 rounded"
-                                          />
-                                        </td>
-                                        <td className="py-2">
-                                          <select
-                                            value={set.type}
-                                            onChange={(e) => handleSetChange(exerciseIndex, setIndex, 'type', e.target.value)}
-                                            className="p-2 border border-gray-300 rounded"
-                                          >
-                                            <option value="normal">Normal</option>
-                                            <option value="warm-up">Warm-up</option>
-                                            <option value="drop">Drop Set</option>
-                                          </select>
-                                        </td>
-                                        <td className="py-2">
-                                          <button
-                                            onClick={() => handleRemoveSet(exerciseIndex, setIndex)}
-                                            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                                            disabled={exercise.sets.length <= 1}
-                                          >
-                                            <X className="w-4 h-4" />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                              <div className="overflow-x-auto">
+  <table className="w-full text-sm">
+    <thead>
+      <tr className="text-left text-gray-600">
+        <th className="pb-3">Set</th>
+        <th className="pb-3">Weight</th>
+        <th className="pb-3">Target</th>
+        <th className="pb-3">Actual Reps</th>
+      </tr>
+    </thead>
+    <tbody>
+      {exercise.sets.map((set, setIndex) => (
+        <tr key={setIndex} className={set.completed ? 'bg-green-50' : ''}>
+          <td className="py-3">{setIndex + 1} {set.type !== 'normal' && `(${set.type})`}</td>
+          <td className="py-3">
+            <div className="flex items-center">
+              <input
+                type="number"
+                min="0"
+                value={set.actualWeight}
+                onChange={(e) => {
+                  const newActiveWorkout = { ...activeWorkout };
+                  newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualWeight = e.target.value;
+                  setActiveWorkout(newActiveWorkout);
+                }}
+                className={`w-16 p-2 border rounded ${
+                  set.completed ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                }`}
+                disabled={set.completed}
+              />
+              <span className="ml-1 text-gray-500 text-xs">{weightUnit}</span>
+            </div>
+          </td>
+          <td className="py-3">{set.reps}</td>
+          <td className="py-3">
+            <div className="flex items-center">
+              <input
+                type="number"
+                min="0"
+                max={99}
+                value={set.actualReps || ''}
+                onChange={(e) => {
+                  const newActiveWorkout = { ...activeWorkout };
+                  newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualReps = e.target.value;
+                  setActiveWorkout(newActiveWorkout);
+                }}
+                className={`w-16 p-2 border rounded ${
+                  set.completed ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                }`}
+                placeholder={set.reps}
+                disabled={set.completed}
+              />
+              <div className="ml-2">
+                {set.completed ? (
+                  <button
+                    onClick={() => handleSetCompleted(exerciseIndex, setIndex, false, 0, set.weight)}
+                    className="p-2 text-green-600 hover:text-green-700 transition-colors"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSetCompleted(exerciseIndex, setIndex, true, set.actualReps || set.reps, set.actualWeight)}
+                    className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
                               </div>
                               
                               <div className="flex justify-end">
