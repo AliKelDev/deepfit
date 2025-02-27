@@ -159,31 +159,6 @@ const WorkoutPage = () => {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   
-  // Unit conversion functions
-  const lbsToKg = (lbs) => {
-    return (parseFloat(lbs) * 0.45359237).toFixed(1);
-  };
-
-  const kgToLbs = (kg) => {
-    return (parseFloat(kg) * 2.20462262).toFixed(1);
-  };
-
-  // Convert weight based on current unit display setting
-  const displayWeight = (weight) => {
-    if (weightUnit === 'kg' && weight) {
-      return lbsToKg(weight);
-    }
-    return weight;
-  };
-
-  // Convert input weight to lbs for storage
-  const storeWeight = (weight) => {
-    if (weightUnit === 'kg' && weight) {
-      return kgToLbs(weight);
-    }
-    return weight;
-  };
-  
   // Format workout data to a readable string for Max
   const formatWorkoutForAI = (workout) => {
     if (!workout) return "";
@@ -668,8 +643,8 @@ const WorkoutPage = () => {
                                             <input
                                               type="number"
                                               min="0"
-                                              value={displayWeight(set.weight)}
-                                              onChange={(e) => handleSetChange(exerciseIndex, setIndex, 'weight', storeWeight(e.target.value))}
+                                              value={set.weight}
+                                              onChange={(e) => handleSetChange(exerciseIndex, setIndex, 'weight', e.target.value)}
                                               className="w-16 p-2 border border-gray-300 rounded"
                                             />
                                             <span className="ml-1 text-gray-500 text-xs">{weightUnit}</span>
@@ -821,7 +796,7 @@ const WorkoutPage = () => {
                                             : 'bg-gray-50 text-gray-500'
                                         }`}
                                       >
-                                        {displayWeight(set.completed ? set.actualWeight : set.weight)}{weightUnit} × {set.completed ? set.actualReps : set.reps}
+                                        {set.completed ? set.actualWeight : set.weight}{weightUnit} × {set.completed ? set.actualReps : set.reps}
                                       </div>
                                     ))}
                                   </div>
@@ -905,10 +880,10 @@ const WorkoutPage = () => {
                                       <input
                                         type="number"
                                         min="0"
-                                        value={displayWeight(set.actualWeight)}
+                                        value={set.actualWeight}
                                         onChange={(e) => {
                                           const newActiveWorkout = { ...activeWorkout };
-                                          newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualWeight = storeWeight(e.target.value);
+                                          newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualWeight = e.target.value;
                                           setActiveWorkout(newActiveWorkout);
                                         }}
                                         className={`w-20 p-2 border rounded ${
