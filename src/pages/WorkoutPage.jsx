@@ -98,6 +98,7 @@ const WorkoutPage = () => {
   // Add these new state variables:
   const [selectedWorkoutForChat, setSelectedWorkoutForChat] = useState(null);
   const [workoutSelectOpen, setWorkoutSelectOpen] = useState(false);
+  const [weightUnit, setWeightUnit] = useState('lbs'); // Default to lbs
 
   // New workout form state
   const [newWorkout, setNewWorkout] = useState({
@@ -158,6 +159,31 @@ const WorkoutPage = () => {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   
+  // Unit conversion functions
+  const lbsToKg = (lbs) => {
+    return (parseFloat(lbs) * 0.45359237).toFixed(1);
+  };
+
+  const kgToLbs = (kg) => {
+    return (parseFloat(kg) * 2.20462262).toFixed(1);
+  };
+
+  // Convert weight based on current unit display setting
+  const displayWeight = (weight) => {
+    if (weightUnit === 'kg' && weight) {
+      return lbsToKg(weight);
+    }
+    return weight;
+  };
+
+  // Convert input weight to lbs for storage
+  const storeWeight = (weight) => {
+    if (weightUnit === 'kg' && weight) {
+      return kgToLbs(weight);
+    }
+    return weight;
+  };
+  
   // Format workout data to a readable string for Max
   const formatWorkoutForAI = (workout) => {
     if (!workout) return "";
@@ -174,9 +200,9 @@ const WorkoutPage = () => {
       exercise.sets.forEach((set, setIndex) => {
         const setType = set.type !== 'normal' ? ` (${set.type})` : '';
         if (set.completed) {
-          formattedData += `  Set ${setIndex + 1}${setType}: ${set.actualWeight}lbs × ${set.actualReps} reps\n`;
+          formattedData += `  Set ${setIndex + 1}${setType}: ${set.actualWeight}${weightUnit} × ${set.actualReps} reps\n`;
         } else {
-          formattedData += `  Set ${setIndex + 1}${setType}: ${set.weight}lbs × ${set.reps} reps (not completed)\n`;
+          formattedData += `  Set ${setIndex + 1}${setType}: ${set.weight}${weightUnit} × ${set.reps} reps (not completed)\n`;
         }
       });
       formattedData += '\n';
@@ -403,6 +429,18 @@ const WorkoutPage = () => {
                 <h1 className="text-2xl font-bold text-gray-800">Workout Tracker</h1>
                 <p className="text-gray-600">Hey {userProfile?.name}, let's crush your fitness goals!</p>
               </div>
+              <div className="flex items-center">
+                <span className={`px-3 py-1 rounded-l-lg ${weightUnit === 'lbs' ? 'bg-[#4A90E2] text-white' : 'bg-gray-200 text-gray-700'}`}
+                      onClick={() => setWeightUnit('lbs')}
+                      style={{cursor: 'pointer'}}>
+                  lbs
+                </span>
+                <span className={`px-3 py-1 rounded-r-lg ${weightUnit === 'kg' ? 'bg-[#4A90E2] text-white' : 'bg-gray-200 text-gray-700'}`}
+                      onClick={() => setWeightUnit('kg')}
+                      style={{cursor: 'pointer'}}>
+                  kg
+                </span>
+              </div>
             </div>
             
             <button
@@ -626,13 +664,16 @@ const WorkoutPage = () => {
                                       <tr key={setIndex}>
                                         <td className="py-2">{setIndex + 1}</td>
                                         <td className="py-2">
-                                          <input
-                                            type="number"
-                                            min="0"
-                                            value={set.weight}
-                                            onChange={(e) => handleSetChange(exerciseIndex, setIndex, 'weight', e.target.value)}
-                                            className="w-16 p-2 border border-gray-300 rounded"
-                                          />
+                                          <div className="flex items-center">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              value={displayWeight(set.weight)}
+                                              onChange={(e) => handleSetChange(exerciseIndex, setIndex, 'weight', storeWeight(e.target.value))}
+                                              className="w-16 p-2 border border-gray-300 rounded"
+                                            />
+                                            <span className="ml-1 text-gray-500 text-xs">{weightUnit}</span>
+                                          </div>
                                         </td>
                                         <td className="py-2">
                                           <input
@@ -780,7 +821,7 @@ const WorkoutPage = () => {
                                             : 'bg-gray-50 text-gray-500'
                                         }`}
                                       >
-                                        {set.completed ? set.actualWeight : set.weight}lbs × {set.completed ? set.actualReps : set.reps}
+                                        {displayWeight(set.completed ? set.actualWeight : set.weight)}{weightUnit} × {set.completed ? set.actualReps : set.reps}
                                       </div>
                                     ))}
                                   </div>
@@ -849,7 +890,7 @@ const WorkoutPage = () => {
                             <thead>
                               <tr className="text-left text-gray-600">
                                 <th className="pb-3">Set</th>
-                                <th className="pb-3">Weight (lbs)</th>
+                                <th className="pb-3">Weight</th>
                                 <th className="pb-3">Reps</th>
                                 <th className="pb-3">Actual</th>
                                 <th className="pb-3"></th>
@@ -860,20 +901,23 @@ const WorkoutPage = () => {
                                 <tr key={setIndex} className={set.completed ? 'bg-green-50' : ''}>
                                   <td className="py-3">{setIndex + 1} {set.type !== 'normal' && `(${set.type})`}</td>
                                   <td className="py-3">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      value={set.actualWeight}
-                                      onChange={(e) => {
-                                        const newActiveWorkout = { ...activeWorkout };
-                                        newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualWeight = e.target.value;
-                                        setActiveWorkout(newActiveWorkout);
-                                      }}
-                                      className={`w-20 p-2 border rounded ${
-                                        set.completed ? 'border-green-300 bg-green-50' : 'border-gray-300'
-                                      }`}
-                                      disabled={set.completed}
-                                    />
+                                    <div className="flex items-center">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={displayWeight(set.actualWeight)}
+                                        onChange={(e) => {
+                                          const newActiveWorkout = { ...activeWorkout };
+                                          newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualWeight = storeWeight(e.target.value);
+                                          setActiveWorkout(newActiveWorkout);
+                                        }}
+                                        className={`w-20 p-2 border rounded ${
+                                          set.completed ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                                        }`}
+                                        disabled={set.completed}
+                                      />
+                                      <span className="ml-1 text-gray-500 text-xs">{weightUnit}</span>
+                                    </div>
                                   </td>
                                   <td className="py-3">{set.reps}</td>
                                   <td className="py-3">
