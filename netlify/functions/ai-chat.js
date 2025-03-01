@@ -126,19 +126,12 @@ ${profileContext}
 
     // Create the user prompt, incorporating image analysis if available
     let userPrompt = messages && messages.length > 0 ? messages[messages.length - 1].content : "";
-    
-    // Handle image analysis - ensure we have a message even for image-only uploads
     if (imageAnalysis) {
-      // If there's image analysis, add it to the prompt
       userPrompt = `[Image Analysis: ${imageAnalysis}]\n\n${userPrompt}`;
     }
-    
-    // Always add the message to aiMessages, even if it's just image analysis with no text
-    // Use a placeholder if there's absolutely nothing to send
-    aiMessages.push({ 
-      role: 'user', 
-      content: userPrompt || "[Image shared without text]" 
-    });
+    if (userPrompt) {
+      aiMessages.push({ role: 'user', content: userPrompt });
+    }
 
     // Gemini API Call with retry logic remains the same
     const geminiResponse = await retryRequest(async () => {

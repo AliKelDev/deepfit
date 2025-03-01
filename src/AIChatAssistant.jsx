@@ -208,6 +208,27 @@ const AIChatAssistant = () => {
     }
   }, [initialMessage]);
 
+  // Add this useEffect to control when the send button is enabled
+  useEffect(() => {
+    // Determine if the send button should be enabled
+    const shouldEnableSend = () => {
+      // Don't allow sending if no text and image is still analyzing
+      if (selectedImage && !currentMessage.trim() && isAnalyzing) {
+        return false;
+      }
+      
+      // Don't allow sending if there's an image but no text and no analysis
+      if (selectedImage && !currentMessage.trim() && !imageAnalysis) {
+        return false;
+      }
+      
+      // In all other cases, allow sending if there's either text or an analyzed image
+      return (currentMessage.trim() || (selectedImage && imageAnalysis));
+    };
+    
+    setCanSend(shouldEnableSend());
+  }, [currentMessage, selectedImage, isAnalyzing, imageAnalysis]);
+
   const handleNavigateToProfile = () => {
     navigate('/profile');
   };
@@ -341,7 +362,7 @@ const AIChatAssistant = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!canSend || (!currentMessage.trim() && !selectedImage) || !activeConversationId) return;
+    if (!canSend || isLoading || !activeConversationId) return;
 
     const now = Date.now();
     if (now - lastRequestTime.current < REQUEST_COOLDOWN) {
@@ -766,10 +787,16 @@ const AIChatAssistant = () => {
                 <textarea
                   value={currentMessage}
                   onChange={(e) => setCurrentMessage(e.target.value)}
-                  placeholder="Ask about workouts or share a form check video..."
+                  placeholder={
+                    selectedImage && isAnalyzing 
+                      ? "Analyzing image... please wait or add text" 
+                      : selectedImage && !imageAnalysis 
+                        ? "Please add text to send with your image" 
+                        : "Ask about workouts or share a form check video..."
+                  }
                   className="flex-1 p-3 border border-[#B8D8F8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A90E2] resize-none h-12"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && canSend && !isLoading) {
                       e.preventDefault();
                       handleSendMessage();
                     }
@@ -778,9 +805,13 @@ const AIChatAssistant = () => {
 
                 <motion.button
                   onClick={handleSendMessage}
-                  className="p-3 bg-[#4A90E2] rounded-lg text-white shadow-md hover:bg-[#357ABD] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  whileTap={{ scale: 0.95 }}
-                  disabled={isLoading || (!currentMessage.trim() && !selectedImage)}
+                  className={`p-3 rounded-lg text-white shadow-md transition-colors ${
+                    canSend && !isLoading
+                      ? 'bg-[#4A90E2] hover:bg-[#357ABD] cursor-pointer' 
+                      : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                  whileTap={canSend && !isLoading ? { scale: 0.95 } : {}}
+                  disabled={!canSend || isLoading}
                 >
                   <Send className="w-5 h-5" />
                 </motion.button>
