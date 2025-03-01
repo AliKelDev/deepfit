@@ -16,7 +16,10 @@ import {
   Scale,
   Percent,
   ChevronRight,
-  Calendar
+  Calendar,
+  LineChart,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -126,6 +129,50 @@ const convertWeight = (value, fromUnit, toUnit) => {
   return value;
 };
 
+// Simple trend visualization component
+const MeasurementTrend = ({ history, label, color = '#4A90E2' }) => {
+  if (!history || history.length < 2) return null;
+  
+  const sortedHistory = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const maxValue = Math.max(...sortedHistory.map(entry => parseFloat(entry.value)));
+  const minValue = Math.min(...sortedHistory.map(entry => parseFloat(entry.value)));
+  const range = maxValue - minValue;
+  const padding = range * 0.1; // 10% padding
+  
+  const getY = (value) => {
+    // Normalize to 0-100 range for percentage height
+    if (range === 0) return 50; // If all values are the same
+    return 100 - ((value - minValue + padding/2) / (range + padding) * 100);
+  };
+  
+  const points = sortedHistory.map((entry, index) => {
+    const x = (index / (sortedHistory.length - 1)) * 100;
+    const y = getY(parseFloat(entry.value));
+    return `${x},${y}`;
+  }).join(' ');
+  
+  return (
+    <div className="mt-2">
+      <div className="text-sm font-medium text-gray-700 mb-1">{label} Trend</div>
+      <div className="relative h-16 w-full bg-gray-50 border border-gray-100 rounded overflow-hidden">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
+          <polyline
+            points={points}
+            fill="none"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <div className="absolute bottom-1 right-2 text-xs text-gray-500">
+          {sortedHistory.length} entries
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProfileManager = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -139,8 +186,27 @@ const ProfileManager = () => {
   const [imageError, setImageError] = useState("");
   const [activeFormTab, setActiveFormTab] = useState("basic");
   
-  // Add a temporary weight state to hold the input value before saving
+  // Temporary values for measurements
   const [tempWeight, setTempWeight] = useState("");
+  const [tempBodyFat, setTempBodyFat] = useState("");
+  const [tempMeasurements, setTempMeasurements] = useState({
+    chest: "",
+    waist: "",
+    hips: "",
+    thighs: "",
+    arms: ""
+  });
+  
+  // States for showing/hiding measurement history sections
+  const [showWeightHistory, setShowWeightHistory] = useState(false);
+  const [showBodyFatHistory, setShowBodyFatHistory] = useState(false);
+  const [showMeasurementHistory, setShowMeasurementHistory] = useState({
+    chest: false,
+    waist: false,
+    hips: false,
+    thighs: false,
+    arms: false
+  });
   
   const [formData, setFormData] = useState({
     id: null,
@@ -153,20 +219,29 @@ const ProfileManager = () => {
     description: "",
     profileImage: DEFAULT_AVATAR,
     profileThumbnail: DEFAULT_AVATAR,
-    // New body composition fields
+    // Height and weight fields
     heightUnit: "cm",
     height: "",
     heightFeet: "",
     heightInches: "",
     weightUnit: "kg",
     weight: "",
+    // Body composition fields
     bodyFat: "",
+    bodyFatHistory: [],
     bodyMeasurements: {
       chest: "",
       waist: "",
       hips: "",
       thighs: "",
       arms: ""
+    },
+    measurementHistory: {
+      chest: [],
+      waist: [],
+      hips: [],
+      thighs: [],
+      arms: []
     },
     weightHistory: []
   });
@@ -206,12 +281,38 @@ const ProfileManager = () => {
     }
   }, [activeProfileId, profiles]);
 
-  // Set tempWeight when editing a profile
+  // Set temporary values when editing a profile
   useEffect(() => {
-    if (editingProfile && editingProfile.weight) {
-      setTempWeight(editingProfile.weight);
+    if (editingProfile) {
+      setTempWeight(editingProfile.weight || "");
+      setTempBodyFat(editingProfile.bodyFat || "");
+      
+      // Initialize temp measurements
+      const measurements = editingProfile.bodyMeasurements || {
+        chest: "",
+        waist: "",
+        hips: "",
+        thighs: "",
+        arms: ""
+      };
+      
+      setTempMeasurements({
+        chest: measurements.chest || "",
+        waist: measurements.waist || "",
+        hips: measurements.hips || "",
+        thighs: measurements.thighs || "",
+        arms: measurements.arms || ""
+      });
     } else {
       setTempWeight("");
+      setTempBodyFat("");
+      setTempMeasurements({
+        chest: "",
+        waist: "",
+        hips: "",
+        thighs: "",
+        arms: ""
+      });
     }
   }, [editingProfile]);
 
@@ -234,6 +335,7 @@ const ProfileManager = () => {
       weightUnit: "kg",
       weight: "",
       bodyFat: "",
+      bodyFatHistory: [],
       bodyMeasurements: {
         chest: "",
         waist: "",
@@ -241,9 +343,27 @@ const ProfileManager = () => {
         thighs: "",
         arms: ""
       },
+      measurementHistory: {
+        chest: [],
+        waist: [],
+        hips: [],
+        thighs: [],
+        arms: []
+      },
       weightHistory: []
     });
+    
+    // Reset temporary values
     setTempWeight("");
+    setTempBodyFat("");
+    setTempMeasurements({
+      chest: "",
+      waist: "",
+      hips: "",
+      thighs: "",
+      arms: ""
+    });
+    
     setPreviewImage(null);
     setEditingProfile(null);
     setShowProfileForm(true);
@@ -260,12 +380,20 @@ const ProfileManager = () => {
       weightUnit: "kg",
       weight: "",
       bodyFat: "",
+      bodyFatHistory: [],
       bodyMeasurements: {
         chest: "",
         waist: "",
         hips: "",
         thighs: "",
         arms: ""
+      },
+      measurementHistory: {
+        chest: [],
+        waist: [],
+        hips: [],
+        thighs: [],
+        arms: []
       },
       weightHistory: []
     };
@@ -284,12 +412,19 @@ const ProfileManager = () => {
       ...(profile.weightUnit && { weightUnit: profile.weightUnit }),
       ...(profile.weight && { weight: profile.weight }),
       ...(profile.bodyFat && { bodyFat: profile.bodyFat }),
+      ...(profile.bodyFatHistory && { bodyFatHistory: profile.bodyFatHistory || [] }),
       ...(profile.bodyMeasurements && { bodyMeasurements: profile.bodyMeasurements }),
+      ...(profile.measurementHistory && { measurementHistory: profile.measurementHistory || {
+        chest: [],
+        waist: [],
+        hips: [],
+        thighs: [],
+        arms: []
+      }}),
       ...(profile.weightHistory && { weightHistory: profile.weightHistory || [] })
     };
 
     setFormData(enhancedProfile);
-    setTempWeight(enhancedProfile.weight || "");
     setPreviewImage(profile.profileImage);
     setEditingProfile(profile);
     setShowProfileForm(true);
@@ -348,19 +483,18 @@ const ProfileManager = () => {
     }
   };
 
-  // Update the weight input handler to only update the temporary state
+  // Weight input and save functions
   const handleWeightInputChange = (value) => {
     setTempWeight(value);
   };
-
-  // Create a new function to save the weight to history
+  
   const saveWeightToHistory = () => {
     if (!tempWeight || isNaN(parseFloat(tempWeight))) return;
     
     // Create a new weight history entry
     const newWeightEntry = {
       date: new Date().toISOString(),
-      weight: parseFloat(tempWeight) || 0,
+      value: parseFloat(tempWeight) || 0,
       unit: formData.weightUnit
     };
     
@@ -369,6 +503,80 @@ const ProfileManager = () => {
       weight: tempWeight,
       weightHistory: [...(prev.weightHistory || []), newWeightEntry]
     }));
+  };
+
+  // Body fat input and save functions
+  const handleBodyFatInputChange = (value) => {
+    setTempBodyFat(value);
+  };
+  
+  const saveBodyFatToHistory = () => {
+    if (!tempBodyFat || isNaN(parseFloat(tempBodyFat))) return;
+    
+    // Create a new body fat history entry
+    const newBodyFatEntry = {
+      date: new Date().toISOString(),
+      value: parseFloat(tempBodyFat) || 0,
+      unit: "%"
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      bodyFat: tempBodyFat,
+      bodyFatHistory: [...(prev.bodyFatHistory || []), newBodyFatEntry]
+    }));
+  };
+
+  // Measurement input and save functions
+  const handleMeasurementInputChange = (key, value) => {
+    setTempMeasurements(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+  
+  const saveMeasurementToHistory = (key) => {
+    if (!tempMeasurements[key] || isNaN(parseFloat(tempMeasurements[key]))) return;
+    
+    // Create a new measurement history entry
+    const newMeasurementEntry = {
+      date: new Date().toISOString(),
+      value: parseFloat(tempMeasurements[key]) || 0,
+      unit: "cm"
+    };
+    
+    setFormData(prev => {
+      // Update the current measurement value
+      const updatedMeasurements = {
+        ...prev.bodyMeasurements,
+        [key]: tempMeasurements[key]
+      };
+      
+      // Update the measurement history
+      const updatedHistory = {
+        ...prev.measurementHistory,
+        [key]: [...(prev.measurementHistory[key] || []), newMeasurementEntry]
+      };
+      
+      return {
+        ...prev,
+        bodyMeasurements: updatedMeasurements,
+        measurementHistory: updatedHistory
+      };
+    });
+  };
+
+  const toggleHistoryVisibility = (type, key = null) => {
+    if (type === 'weight') {
+      setShowWeightHistory(prev => !prev);
+    } else if (type === 'bodyFat') {
+      setShowBodyFatHistory(prev => !prev);
+    } else if (type === 'measurement' && key) {
+      setShowMeasurementHistory(prev => ({
+        ...prev,
+        [key]: !prev[key]
+      }));
+    }
   };
 
   const handleWeightUnitChange = (unit) => {
@@ -395,12 +603,51 @@ const ProfileManager = () => {
           weightUnit: unit
         }));
       }
+      
+      // Convert all weight history entries to the new unit
+      if (formData.weightHistory && formData.weightHistory.length > 0) {
+        const updatedHistory = formData.weightHistory.map(entry => {
+          if (entry.unit === formData.weightUnit) {
+            const convertedValue = convertWeight(entry.value, entry.unit, unit);
+            return { ...entry, value: convertedValue, unit };
+          }
+          return entry;
+        });
+        
+        setFormData(prev => ({
+          ...prev,
+          weightHistory: updatedHistory
+        }));
+      }
     } else {
       setFormData(prev => ({
         ...prev,
         weightUnit: unit
       }));
     }
+  };
+
+  const handleHeightUnitChange = (unit) => {
+    // Convert existing height to the new unit if needed
+    let updatedHeight = {};
+    
+    if (unit === "cm" && formData.heightUnit === "ft/in") {
+      const feet = parseFloat(formData.heightFeet) || 0;
+      const inches = parseFloat(formData.heightInches) || 0;
+      const heightCm = convertHeight({ feet, inches }, "ft/in", "cm");
+      updatedHeight = { height: heightCm.toString(), heightFeet: "", heightInches: "" };
+    } 
+    else if (unit === "ft/in" && formData.heightUnit === "cm") {
+      const cm = parseFloat(formData.height) || 0;
+      const { feet, inches } = convertHeight(cm, "cm", "ft/in");
+      updatedHeight = { height: "", heightFeet: feet.toString(), heightInches: inches.toString() };
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      heightUnit: unit,
+      ...updatedHeight
+    }));
   };
 
   const handleSubmit = (e) => {
@@ -435,6 +682,14 @@ const ProfileManager = () => {
       physicalLimitations: formData.physicalLimitations || [],
       equipment: formData.equipment || [],
       weightHistory: formData.weightHistory || [],
+      bodyFatHistory: formData.bodyFatHistory || [],
+      measurementHistory: formData.measurementHistory || {
+        chest: [],
+        waist: [],
+        hips: [],
+        thighs: [],
+        arms: []
+      }
     };
 
     setProfiles(prev => {
@@ -476,37 +731,23 @@ const ProfileManager = () => {
     }));
   };
 
-  const handleBodyMeasurementChange = (key, value) => {
-    setFormData(prev => ({
-      ...prev,
-      bodyMeasurements: {
-        ...prev.bodyMeasurements,
-        [key]: value
-      }
-    }));
-  };
-
-  const handleHeightUnitChange = (unit) => {
-    // Convert existing height to the new unit if needed
-    let updatedHeight = {};
-    
-    if (unit === "cm" && formData.heightUnit === "ft/in") {
-      const feet = parseFloat(formData.heightFeet) || 0;
-      const inches = parseFloat(formData.heightInches) || 0;
-      const heightCm = convertHeight({ feet, inches }, "ft/in", "cm");
-      updatedHeight = { height: heightCm.toString(), heightFeet: "", heightInches: "" };
-    } 
-    else if (unit === "ft/in" && formData.heightUnit === "cm") {
-      const cm = parseFloat(formData.height) || 0;
-      const { feet, inches } = convertHeight(cm, "cm", "ft/in");
-      updatedHeight = { height: "", heightFeet: feet.toString(), heightInches: inches.toString() };
+  const renderHistoryEntries = (history, unit = "") => {
+    if (!history || history.length === 0) {
+      return <div className="text-sm text-gray-500 italic">No history entries yet</div>;
     }
     
-    setFormData(prev => ({
-      ...prev,
-      heightUnit: unit,
-      ...updatedHeight
-    }));
+    const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    return (
+      <div className="max-h-32 overflow-y-auto mt-1">
+        {sortedHistory.map((entry, index) => (
+          <div key={index} className="text-sm text-gray-600 flex justify-between border-b border-gray-100 py-1">
+            <span>{new Date(entry.date).toLocaleDateString()}</span>
+            <span>{entry.value} {entry.unit || unit}</span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const ProfileImage = ({ src, size = "large", editable = false }) => {
@@ -536,6 +777,73 @@ const ProfileManager = () => {
           >
             <Camera className="w-4 h-4" />
           </button>
+        )}
+      </div>
+    );
+  };
+
+  // Measurement Input with History component
+  const MeasurementInputWithHistory = ({ 
+    label, 
+    icon, 
+    tempValue, 
+    onTempChange, 
+    onSave, 
+    history, 
+    unit = "cm", 
+    showHistory, 
+    onToggleHistory 
+  }) => {
+    return (
+      <div className="space-y-2">
+        <h3 className="font-medium text-gray-800 flex items-center gap-2">
+          {icon}
+          {label}
+        </h3>
+        
+        <div className="flex gap-2 items-start">
+          <div className="relative flex-1">
+            <input
+              type="number"
+              value={tempValue}
+              onChange={(e) => onTempChange(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+              placeholder={`${label} measurement`}
+              min="0"
+              step="0.1"
+            />
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <span className="text-gray-500">{unit}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onSave}
+            className="px-4 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors flex items-center"
+            disabled={!tempValue}
+          >
+            <Save className="w-5 h-5" />
+          </button>
+        </div>
+        
+        {history && history.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={onToggleHistory}
+              className="flex items-center gap-2 text-sm text-[#4A90E2] font-medium mt-1"
+            >
+              {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {showHistory ? "Hide History" : "Show History"} ({history.length} entries)
+            </button>
+            
+            {showHistory && (
+              <div className="mt-2 bg-gray-50 p-2 rounded-lg">
+                {renderHistoryEntries(history, unit)}
+                <MeasurementTrend history={history} label={label} />
+              </div>
+            )}
+          </div>
         )}
       </div>
     );
@@ -795,463 +1103,487 @@ const ProfileManager = () => {
                           >
                             <p className="text-sm text-gray-600">{selectedLevel.description}</p>
                           </motion.div>
-                          )}
-                          </AnimatePresence>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+    
+                  {/* Physical Limitations Section */}
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-gray-800">Physical Limitations</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {PHYSICAL_LIMITATIONS.map((limitation) => (
+                        <motion.div
+                          key={limitation}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input
+                              type="checkbox"
+                              checked={formData.physicalLimitations && formData.physicalLimitations.includes(limitation)}
+                              onChange={() => handleLimitationsChange(limitation)}
+                              className="w-4 h-4 text-[#4A90E2] border-gray-300 rounded focus:ring-[#4A90E2]"
+                            />
+                            <span className="ml-2 text-sm">{limitation}</span>
+                          </label>
+                        </motion.div>
+                      ))}
+                    </div>
+                    <div className="mt-4">
+                      <label className="text-sm font-medium text-gray-700">Other Limitations</label>
+                      <input
+                        type="text"
+                        value={formData.otherLimitations || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, otherLimitations: e.target.value }))}
+                        className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                        placeholder="Enter any other physical limitations..."
+                      />
+                    </div>
+                  </div>
+    
+                  {/* Personal Description Section */}
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-gray-800">About You</h2>
+                    <textarea
+                      value={formData.description || ""}
+                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent h-32"
+                      placeholder="Tell us about your fitness journey, goals, favorite sports..."
+                    />
+                  </div>
+                </div>
+              )}
+    
+              {/* Body Composition Tab */}
+              {activeFormTab === "bodyComp" && (
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-gray-800">Body Composition</h2>
+                    <div className="text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Save className="w-4 h-4" /> Save to track history
+                      </span>
+                    </div>
+                  </div>
+    
+                  {/* Height & Weight Section */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Height */}
+                    <div className="space-y-4">
+                      <h3 className="font-medium text-gray-800 flex items-center gap-2">
+                        <Ruler className="w-5 h-5 text-[#4A90E2]" />
+                        Height
+                      </h3>
+                      
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleHeightUnitChange("cm")}
+                            className={`px-3 py-2 text-sm font-medium ${
+                              formData.heightUnit === "cm" 
+                                ? "bg-[#4A90E2] text-white" 
+                                : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                            }`}
+                          >
+                            cm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleHeightUnitChange("ft/in")}
+                            className={`px-3 py-2 text-sm font-medium ${
+                              formData.heightUnit === "ft/in" 
+                                ? "bg-[#4A90E2] text-white" 
+                                : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                            }`}
+                          >
+                            ft/in
+                          </button>
                         </div>
                       </div>
-    
-                      {/* Physical Limitations Section */}
-                      <div className="space-y-4">
-                        <h2 className="text-xl font-semibold text-gray-800">Physical Limitations</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {PHYSICAL_LIMITATIONS.map((limitation) => (
-                            <motion.div
-                              key={limitation}
-                              whileTap={{ scale: 0.95 }}
-                            >
-                              <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.physicalLimitations && formData.physicalLimitations.includes(limitation)}
-                                  onChange={() => handleLimitationsChange(limitation)}
-                                  className="w-4 h-4 text-[#4A90E2] border-gray-300 rounded focus:ring-[#4A90E2]"
-                                />
-                                <span className="ml-2 text-sm">{limitation}</span>
-                              </label>
-                            </motion.div>
-                          ))}
-                        </div>
-                        <div className="mt-4">
-                          <label className="text-sm font-medium text-gray-700">Other Limitations</label>
+                      
+                      {formData.heightUnit === "cm" ? (
+                        <div className="relative">
                           <input
-                            type="text"
-                            value={formData.otherLimitations || ""}
-                            onChange={(e) => setFormData(prev => ({ ...prev, otherLimitations: e.target.value }))}
-                            className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                            placeholder="Enter any other physical limitations..."
+                            type="number"
+                            value={formData.height}
+                            onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                            placeholder="Height in centimeters"
+                            min="0"
                           />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500">cm</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 items-center">
+                          <div className="relative flex-1">
+                            <input
+                              type="number"
+                              value={formData.heightFeet}
+                              onChange={(e) => setFormData(prev => ({ ...prev, heightFeet: e.target.value }))}
+                              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                              placeholder="Feet"
+                              min="0"
+                            />
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500">ft</span>
+                            </div>
+                          </div>
+                          <div className="relative flex-1">
+                            <input
+                              type="number"
+                              value={formData.heightInches}
+                              onChange={(e) => setFormData(prev => ({ ...prev, heightInches: e.target.value }))}
+                              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                              placeholder="Inches"
+                              min="0"
+                              max="11"
+                            />
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500">in</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Weight with History */}
+                    <div className="space-y-4">
+                      <h3 className="font-medium text-gray-800 flex items-center gap-2">
+                        <Scale className="w-5 h-5 text-[#4A90E2]" />
+                        Weight
+                      </h3>
+                      
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleWeightUnitChange("kg")}
+                            className={`px-3 py-2 text-sm font-medium ${
+                              formData.weightUnit === "kg" 
+                                ? "bg-[#4A90E2] text-white" 
+                                : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                            }`}
+                          >
+                            kg
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleWeightUnitChange("lbs")}
+                            className={`px-3 py-2 text-sm font-medium ${
+                              formData.weightUnit === "lbs" 
+                                ? "bg-[#4A90E2] text-white" 
+                                : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                            }`}
+                          >
+                            lbs
+                          </button>
                         </div>
                       </div>
+                      
+                      {/* Weight Input with Save Button */}
+                      <div className="flex gap-2 items-start">
+                        <div className="relative flex-1">
+                          <input
+                            type="number"
+                            value={tempWeight}
+                            onChange={(e) => handleWeightInputChange(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                            placeholder={`Weight in ${formData.weightUnit}`}
+                            min="0"
+                            step="0.1"
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <span className="text-gray-500">{formData.weightUnit}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={saveWeightToHistory}
+                          className="px-4 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors flex items-center"
+                          disabled={!tempWeight}
+                        >
+                          <Save className="w-5 h-5" />
+                        </button>
+                      </div>
+                      
+                      {/* Weight History */}
+                      {formData.weightHistory && formData.weightHistory.length > 0 && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleHistoryVisibility('weight')}
+                            className="flex items-center gap-2 text-sm text-[#4A90E2] font-medium"
+                          >
+                            {showWeightHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            {showWeightHistory ? "Hide Weight History" : "Show Weight History"} ({formData.weightHistory.length} entries)
+                          </button>
+                          
+                          {showWeightHistory && (
+                            <div className="mt-2 bg-gray-50 p-2 rounded-lg">
+                              {renderHistoryEntries(formData.weightHistory)}
+                              <MeasurementTrend history={formData.weightHistory} label="Weight" />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
     
-                      {/* Personal Description Section */}
-                      <div className="space-y-4">
-                        <h2 className="text-xl font-semibold text-gray-800">About You</h2>
-                        <textarea
-                          value={formData.description || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                          className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent h-32"
-                          placeholder="Tell us about your fitness journey, goals, favorite sports..."
+                  {/* Body Fat & Measurements */}
+                  <div className="space-y-6">
+                    <h3 className="font-medium text-gray-800 flex items-center gap-2">
+                      <Percent className="w-5 h-5 text-[#4A90E2]" />
+                      Body Fat
+                    </h3>
+                    
+                    {/* Body Fat Input with History */}
+                    <div className="flex gap-2 items-start">
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          value={tempBodyFat}
+                          onChange={(e) => handleBodyFatInputChange(e.target.value)}
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                          placeholder="Enter body fat percentage"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                        />
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500">%</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={saveBodyFatToHistory}
+                        className="px-4 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors flex items-center"
+                        disabled={!tempBodyFat}
+                      >
+                        <Save className="w-5 h-5" />
+                      </button>
+                    </div>
+                    
+                    {/* Body Fat History */}
+                    {formData.bodyFatHistory && formData.bodyFatHistory.length > 0 && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => toggleHistoryVisibility('bodyFat')}
+                          className="flex items-center gap-2 text-sm text-[#4A90E2] font-medium"
+                        >
+                          {showBodyFatHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          {showBodyFatHistory ? "Hide Body Fat History" : "Show Body Fat History"} ({formData.bodyFatHistory.length} entries)
+                        </button>
+                        
+                        {showBodyFatHistory && (
+                          <div className="mt-2 bg-gray-50 p-2 rounded-lg">
+                            {renderHistoryEntries(formData.bodyFatHistory, "%")}
+                            <MeasurementTrend history={formData.bodyFatHistory} label="Body Fat" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Measurements with History */}
+                    <div className="mt-6">
+                      <h3 className="font-medium text-gray-800 flex items-center gap-2 mb-4">
+                        <Ruler className="w-5 h-5 text-[#4A90E2]" />
+                        Body Measurements
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Chest Measurement */}
+                        <MeasurementInputWithHistory
+                          label="Chest"
+                          icon={<Ruler className="w-4 h-4 text-[#4A90E2]" />}
+                          tempValue={tempMeasurements.chest}
+                          onTempChange={(value) => handleMeasurementInputChange('chest', value)}
+                          onSave={() => saveMeasurementToHistory('chest')}
+                          history={formData.measurementHistory.chest}
+                          unit="cm"
+                          showHistory={showMeasurementHistory.chest}
+                          onToggleHistory={() => toggleHistoryVisibility('measurement', 'chest')}
+                        />
+                        
+                        {/* Waist Measurement */}
+                        <MeasurementInputWithHistory
+                          label="Waist"
+                          icon={<Ruler className="w-4 h-4 text-[#4A90E2]" />}
+                          tempValue={tempMeasurements.waist}
+                          onTempChange={(value) => handleMeasurementInputChange('waist', value)}
+                          onSave={() => saveMeasurementToHistory('waist')}
+                          history={formData.measurementHistory.waist}
+                          unit="cm"
+                          showHistory={showMeasurementHistory.waist}
+                          onToggleHistory={() => toggleHistoryVisibility('measurement', 'waist')}
+                        />
+                        
+                        {/* Hips Measurement */}
+                        <MeasurementInputWithHistory
+                          label="Hips"
+                          icon={<Ruler className="w-4 h-4 text-[#4A90E2]" />}
+                          tempValue={tempMeasurements.hips}
+                          onTempChange={(value) => handleMeasurementInputChange('hips', value)}
+                          onSave={() => saveMeasurementToHistory('hips')}
+                          history={formData.measurementHistory.hips}
+                          unit="cm"
+                          showHistory={showMeasurementHistory.hips}
+                          onToggleHistory={() => toggleHistoryVisibility('measurement', 'hips')}
+                        />
+                        
+                        {/* Thighs Measurement */}
+                        <MeasurementInputWithHistory
+                          label="Thighs"
+                          icon={<Ruler className="w-4 h-4 text-[#4A90E2]" />}
+                          tempValue={tempMeasurements.thighs}
+                          onTempChange={(value) => handleMeasurementInputChange('thighs', value)}
+                          onSave={() => saveMeasurementToHistory('thighs')}
+                          history={formData.measurementHistory.thighs}
+                          unit="cm"
+                          showHistory={showMeasurementHistory.thighs}
+                          onToggleHistory={() => toggleHistoryVisibility('measurement', 'thighs')}
+                        />
+                        
+                        {/* Arms Measurement */}
+                        <MeasurementInputWithHistory
+                          label="Arms"
+                          icon={<Ruler className="w-4 h-4 text-[#4A90E2]" />}
+                          tempValue={tempMeasurements.arms}
+                          onTempChange={(value) => handleMeasurementInputChange('arms', value)}
+                          onSave={() => saveMeasurementToHistory('arms')}
+                          history={formData.measurementHistory.arms}
+                          unit="cm"
+                          showHistory={showMeasurementHistory.arms}
+                          onToggleHistory={() => toggleHistoryVisibility('measurement', 'arms')}
                         />
                       </div>
                     </div>
-                  )}
-    
-                  {/* Body Composition Tab */}
-                  {activeFormTab === "bodyComp" && (
-                    <div className="space-y-8">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-semibold text-gray-800">Body Composition</h2>
-                        <div className="text-sm text-gray-500">
-                          All measurements are optional
-                        </div>
-                      </div>
-    
-                      {/* Height & Weight Section */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Height */}
-                        <div className="space-y-4">
-                          <h3 className="font-medium text-gray-800 flex items-center gap-2">
-                            <Ruler className="w-5 h-5 text-[#4A90E2]" />
-                            Height
-                          </h3>
-                          
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() => handleHeightUnitChange("cm")}
-                                className={`px-3 py-2 text-sm font-medium ${
-                                  formData.heightUnit === "cm" 
-                                    ? "bg-[#4A90E2] text-white" 
-                                    : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-                                }`}
-                              >
-                                cm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleHeightUnitChange("ft/in")}
-                                className={`px-3 py-2 text-sm font-medium ${
-                                  formData.heightUnit === "ft/in" 
-                                    ? "bg-[#4A90E2] text-white" 
-                                    : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-                                }`}
-                              >
-                                ft/in
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {formData.heightUnit === "cm" ? (
-                            <div className="relative">
-                              <input
-                                type="number"
-                                value={formData.height}
-                                onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                                placeholder="Height in centimeters"
-                                min="0"
-                              />
-                              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                <span className="text-gray-500">cm</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2 items-center">
-                              <div className="relative flex-1">
-                                <input
-                                  type="number"
-                                  value={formData.heightFeet}
-                                  onChange={(e) => setFormData(prev => ({ ...prev, heightFeet: e.target.value }))}
-                                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                                  placeholder="Feet"
-                                  min="0"
-                                />
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                  <span className="text-gray-500">ft</span>
-                                </div>
-                              </div>
-                              <div className="relative flex-1">
-                                <input
-                                  type="number"
-                                  value={formData.heightInches}
-                                  onChange={(e) => setFormData(prev => ({ ...prev, heightInches: e.target.value }))}
-                                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                                  placeholder="Inches"
-                                  min="0"
-                                  max="11"
-                                />
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                  <span className="text-gray-500">in</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Weight */}
-                        <div className="space-y-4">
-                          <h3 className="font-medium text-gray-800 flex items-center gap-2">
-                            <Scale className="w-5 h-5 text-[#4A90E2]" />
-                            Weight
-                          </h3>
-                          
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() => handleWeightUnitChange("kg")}
-                                className={`px-3 py-2 text-sm font-medium ${
-                                  formData.weightUnit === "kg" 
-                                    ? "bg-[#4A90E2] text-white" 
-                                    : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-                                }`}
-                              >
-                                kg
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleWeightUnitChange("lbs")}
-                                className={`px-3 py-2 text-sm font-medium ${
-                                  formData.weightUnit === "lbs" 
-                                    ? "bg-[#4A90E2] text-white" 
-                                    : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-                                }`}
-                              >
-                                lbs
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {/* Updated Weight Input with Save Button */}
-                          <div className="flex gap-2 items-start">
-                            <div className="relative flex-1">
-                              <input
-                                type="number"
-                                value={tempWeight}
-                                onChange={(e) => handleWeightInputChange(e.target.value)}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                                placeholder={`Weight in ${formData.weightUnit}`}
-                                min="0"
-                                step="0.1"
-                              />
-                              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                <span className="text-gray-500">{formData.weightUnit}</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={saveWeightToHistory}
-                              className="px-4 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors flex items-center"
-                              disabled={!tempWeight}
-                            >
-                              <Save className="w-5 h-5" />
-                            </button>
-                          </div>
-                          
-                          {/* Weight History */}
-                          {formData.weightHistory && formData.weightHistory.length > 0 && (
-                            <div className="mt-4">
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Calendar className="w-4 h-4" />
-                                <span>Weight History:</span>
-                              </div>
-                              <div className="mt-1 max-h-24 overflow-y-auto">
-                                {formData.weightHistory.slice().reverse().map((entry, index) => (
-                                  <div key={index} className="text-sm text-gray-600 flex justify-between border-b border-gray-100 py-1">
-                                    <span>{new Date(entry.date).toLocaleDateString()}</span>
-                                    <span>{entry.weight} {entry.unit}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-    
-                      {/* Body Fat & Measurements */}
-                      <div className="space-y-4">
-                        <h3 className="font-medium text-gray-800 flex items-center gap-2">
-                          <Percent className="w-5 h-5 text-[#4A90E2]" />
-                          Body Fat & Measurements
-                        </h3>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Body Fat */}
-                          <div className="relative">
-                            <label className="text-sm font-medium text-gray-700">Body Fat Percentage</label>
-                            <input
-                              type="number"
-                              value={formData.bodyFat}
-                              onChange={(e) => setFormData(prev => ({ ...prev, bodyFat: e.target.value }))}
-                              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                              placeholder="Enter body fat percentage"
-                              min="0"
-                              max="100"
-                            />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none mt-1">
-                              <span className="text-gray-500">%</span>
-                            </div>
-                          </div>
-                          
-                          {/* Chest Measurement */}
-                          <div className="relative">
-                            <label className="text-sm font-medium text-gray-700">Chest</label>
-                            <input
-                              type="number"
-                              value={formData.bodyMeasurements.chest}
-                              onChange={(e) => handleBodyMeasurementChange('chest', e.target.value)}
-                              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                              placeholder="Chest measurement"
-                              min="0"
-                              step="0.1"
-                            />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none mt-1">
-                              <span className="text-gray-500">cm</span>
-                            </div>
-                          </div>
-                          
-                          {/* Waist Measurement */}
-                          <div className="relative">
-                            <label className="text-sm font-medium text-gray-700">Waist</label>
-                            <input
-                              type="number"
-                              value={formData.bodyMeasurements.waist}
-                              onChange={(e) => handleBodyMeasurementChange('waist', e.target.value)}
-                              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                              placeholder="Waist measurement"
-                              min="0"
-                              step="0.1"
-                            />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none mt-1">
-                              <span className="text-gray-500">cm</span>
-                            </div>
-                          </div>
-                          
-                          {/* Hips Measurement */}
-                          <div className="relative">
-                            <label className="text-sm font-medium text-gray-700">Hips</label>
-                            <input
-                              type="number"
-                              value={formData.bodyMeasurements.hips}
-                              onChange={(e) => handleBodyMeasurementChange('hips', e.target.value)}
-                              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                              placeholder="Hips measurement"
-                              min="0"
-                              step="0.1"
-                            />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none mt-1">
-                              <span className="text-gray-500">cm</span>
-                            </div>
-                          </div>
-                          
-                          {/* Thighs Measurement */}
-                          <div className="relative">
-                            <label className="text-sm font-medium text-gray-700">Thighs</label>
-                            <input
-                              type="number"
-                              value={formData.bodyMeasurements.thighs}
-                              onChange={(e) => handleBodyMeasurementChange('thighs', e.target.value)}
-                              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                              placeholder="Thighs measurement"
-                              min="0"
-                              step="0.1"
-                            />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none mt-1">
-                              <span className="text-gray-500">cm</span>
-                            </div>
-                          </div>
-                          
-                          {/* Arms Measurement */}
-                          <div className="relative">
-                            <label className="text-sm font-medium text-gray-700">Arms</label>
-                            <input
-                              type="number"
-                              value={formData.bodyMeasurements.arms}
-                              onChange={(e) => handleBodyMeasurementChange('arms', e.target.value)}
-                              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
-                              placeholder="Arms measurement"
-                              min="0"
-                              step="0.1"
-                            />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none mt-1">
-                              <span className="text-gray-500">cm</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-    
-                      {/* Tracking Stats Section */}
-                      <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
-                        <h3 className="text-blue-800 font-medium flex items-center gap-2">
-                          <BarChart2 className="w-5 h-5" />
-                          Tracking Progress
-                        </h3>
-                        <p className="text-blue-700 text-sm mt-1">
-                          Your weight changes will be tracked when you save them using the save button.
-                          Regular updates to your measurements will help track your fitness journey more accurately.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-    
-                  {/* Equipment Tab */}
-                  {activeFormTab === "equipment" && (
-                    <div className="space-y-6">
-                      <h2 className="text-xl font-semibold text-gray-800">Available Equipment</h2>
-                      <p className="text-gray-600">
-                        Select the equipment you have access to for your workouts. This helps Max create appropriate workout plans.
-                      </p>
-    
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {AVAILABLE_EQUIPMENT.map((equipment) => (
-                          <motion.button
-                            key={equipment.name}
-                            type="button"
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleEquipmentToggle(equipment.name)}
-                            className={`p-4 rounded-lg border ${
-                              formData.equipment && formData.equipment.includes(equipment.name)
-                                ? 'border-[#4A90E2] bg-[#E8F4FF]'
-                                : 'border-gray-200 hover:bg-gray-50'
-                            } transition-colors duration-200`}
-                          >
-                            <div className="text-2xl mb-2">{equipment.icon}</div>
-                            <div className="text-sm font-medium">{equipment.name}</div>
-                            <div className="text-xs text-gray-500">{equipment.category}</div>
-                          </motion.button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-    
-                  {/* Error Message */}
-                  <AnimatePresence>
-                    {error && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="flex items-center gap-2 p-4 bg-red-50 text-red-600 rounded-lg"
-                      >
-                        <AlertCircle className="w-5 h-5" />
-                        {error}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-    
-                  {/* Action Buttons */}
-                  <div className="flex justify-end gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowProfileForm(false)}
-                      className="px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex items-center gap-2 px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
-                    >
-                      <Save className="w-5 h-5" />
-                      {editingProfile ? 'Update Profile' : 'Save Profile'}
-                    </button>
                   </div>
-                </form>
-              </motion.div>
-            )}
     
-            {/* Delete Confirmation Modal */}
-            <AnimatePresence>
-              {showDeleteConfirm && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-                >
-                  <motion.div
-                    initial={{ scale: 0.95 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0.95 }}
-                    className="bg-white rounded-lg p-6 max-w-sm w-full"
-                  >
-                    <h3 className="text-lg font-semibold mb-2">Delete Profile</h3>
-                    <p className="text-gray-600 mb-4">
-                      Are you sure you want to delete the profile for {profileToDelete?.name}? This action cannot be undone.
+                  {/* Tracking Stats Section */}
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                    <h3 className="text-blue-800 font-medium flex items-center gap-2">
+                      <LineChart className="w-5 h-5" />
+                      Tracking Progress
+                    </h3>
+                    <p className="text-blue-700 text-sm mt-1">
+                      All body measurements are now tracked over time. Click the save button next to each measurement to record a new entry.
+                      View your progress by expanding the history sections for each measurement.
                     </p>
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => setShowDeleteConfirm(false)}
-                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={confirmDeleteProfile}
-                        className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
               )}
-            </AnimatePresence>
-          </div>
-        </div>
-      );
-    };
     
-    export default ProfileManager;
+              {/* Equipment Tab */}
+              {activeFormTab === "equipment" && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-semibold text-gray-800">Available Equipment</h2>
+                  <p className="text-gray-600">
+                    Select the equipment you have access to for your workouts. This helps Max create appropriate workout plans.
+                  </p>
+    
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {AVAILABLE_EQUIPMENT.map((equipment) => (
+                      <motion.button
+                        key={equipment.name}
+                        type="button"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleEquipmentToggle(equipment.name)}
+                        className={`p-4 rounded-lg border ${
+                          formData.equipment && formData.equipment.includes(equipment.name)
+                            ? 'border-[#4A90E2] bg-[#E8F4FF]'
+                            : 'border-gray-200 hover:bg-gray-50'
+                        } transition-colors duration-200`}
+                      >
+                        <div className="text-2xl mb-2">{equipment.icon}</div>
+                        <div className="text-sm font-medium">{equipment.name}</div>
+                        <div className="text-xs text-gray-500">{equipment.category}</div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+    
+              {/* Error Message */}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="flex items-center gap-2 p-4 bg-red-50 text-red-600 rounded-lg"
+                  >
+                    <AlertCircle className="w-5 h-5" />
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+    
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileForm(false)}
+                  className="px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-6 py-3 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
+                >
+                  <Save className="w-5 h-5" />
+                  {editingProfile ? 'Update Profile' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+    
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            >
+              <motion.div
+                initial={{ scale: 0.95 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.95 }}
+                className="bg-white rounded-lg p-6 max-w-sm w-full"
+              >
+                <h3 className="text-lg font-semibold mb-2">Delete Profile</h3>
+                <p className="text-gray-600 mb-4">
+                  Are you sure you want to delete the profile for {profileToDelete?.name}? This action cannot be undone.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteProfile}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+
+export default ProfileManager;
