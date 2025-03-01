@@ -17,6 +17,44 @@ const thinkingMessages = [
   "Getting your fitness plan ready..."
 ];
 
+// Function to resize and compress image before storage
+const resizeImage = (file, maxWidth = 800, maxHeight = 600, quality = 0.7) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        // Calculate new dimensions
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height;
+          height = maxHeight;
+        }
+        
+        // Create canvas and resize
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to base64 with compression
+        const base64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(base64);
+      };
+    };
+  });
+};
+
 const ProfilePicture = ({ src, size = "medium", className = "" }) => {
   const sizeClasses = {
     small: "w-8 h-8",
@@ -338,32 +376,43 @@ const AIChatAssistant = () => {
     const file = e.target.files[0];
     if (file && file.type.startsWith('image/')) {
       setIsAnalyzing(true);
-      setSelectedImage(file);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
+      
+      // Create temporary preview URL for immediate display
+      const tempUrl = URL.createObjectURL(file);
+      setPreviewUrl(tempUrl);
+      
+      try {
+        // Compress and convert to base64 for storage
+        const base64Image = await resizeImage(file);
+        setSelectedImage({ file, base64: base64Image });
+        
+        // Analyze the image
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64String = reader.result.split(',')[1];
+          try {
+            const response = await fetch('/.netlify/functions/moondream-analysis', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageBase64: base64String })
+            });
 
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result.split(',')[1];
-        try {
-          const response = await fetch('/.netlify/functions/moondream-analysis', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64: base64String })
-          });
+            if (!response.ok) throw new Error('Image analysis failed');
 
-          if (!response.ok) throw new Error('Image analysis failed');
-
-          const data = await response.json();
-          setImageAnalysis(data.caption);
-        } catch (error) {
-          console.error('Error analyzing image:', error);
-          setImageAnalysis('Failed to analyze image');
-        } finally {
-          setIsAnalyzing(false);
-        }
-      };
-      reader.readAsDataURL(file);
+            const data = await response.json();
+            setImageAnalysis(data.caption);
+          } catch (error) {
+            console.error('Error analyzing image:', error);
+            setImageAnalysis('Failed to analyze image');
+          } finally {
+            setIsAnalyzing(false);
+          }
+        };
+        reader.readAsDataURL(file);
+      } catch (error) {
+        console.error('Error processing image:', error);
+        setIsAnalyzing(false);
+      }
     }
   };
 
@@ -396,12 +445,12 @@ const AIChatAssistant = () => {
     lastRequestTime.current = now;
     setIsLoading(true);
 
-    // Added pendingResponse flag to prevent duplicate sending
+    // Create user message with base64 image if present
     const userMessage = {
       id: Date.now(),
       type: 'user',
       content: currentMessage,
-      imageUrl: previewUrl,
+      imageUrl: selectedImage?.base64 || null, // Store base64 image for persistence
       pendingResponse: true
     };
 
@@ -657,13 +706,6 @@ const AIChatAssistant = () => {
                       animate={{ opacity: 1, y: 0 }}
                       className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      {message.type === 'user' && message.imageUrl && (
-                        <img
-                          src={message.imageUrl}
-                          alt="User uploaded"
-                          className="max-h-24 w-auto rounded-lg object-cover self-end shadow-md"
-                        />
-                      )}
                       <div className={`max-w-2xl p-4 rounded-xl ${
                         message.type === 'user'
                           ? 'bg-white border border-[#B8D8F8] ml-12'
@@ -685,6 +727,17 @@ const AIChatAssistant = () => {
                             {message.type === 'user' ? activeProfile?.name || 'You' : 'Max'}
                           </span>
                         </div>
+                        
+                        {/* Render image if present - now using base64 string directly */}
+                        {message.type === 'user' && message.imageUrl && (
+                          <div className="mb-3">
+                            <img
+                              src={message.imageUrl}
+                              alt="User uploaded"
+                              className="max-h-48 w-auto rounded-lg object-cover shadow-md"
+                            />
+                          </div>
+                        )}
                         
                         {/* Render workout data if present */}
                         {workoutData && (
