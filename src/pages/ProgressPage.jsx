@@ -22,10 +22,11 @@ import {
   AlertTriangle,
   Ruler,
   Scale,
-  Percent
+  Percent,
+  MessageSquare
 } from 'lucide-react';
 
-// Import or define the MeasurementTrend component
+// Measurement trend component
 const MeasurementTrend = ({ history, label, color = '#4A90E2' }) => {
   if (!history || history.length < 2) return null;
   
@@ -93,6 +94,46 @@ const ProgressPage = () => {
     thighs: false,
     arms: false
   });
+
+  // Function to share progress data with Max
+  const handleShareWithMax = () => {
+    // Collect data based on active tab
+    let progressData = {
+      type: 'progress',
+      tab: activeTab,
+      timeRange: timeRange,
+      stats: getWorkoutStats(),
+      title: `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Progress`
+    };
+    
+    // Add tab-specific data
+    if (activeTab === 'overview') {
+      progressData.muscleGroupData = muscleGroupData;
+      progressData.weeklyWorkouts = weeklyWorkouts;
+    } 
+    else if (activeTab === 'exercises') {
+      progressData.selectedExercise = selectedExercise;
+      progressData.exerciseProgressData = getExerciseProgressData();
+    }
+    else if (activeTab === 'records') {
+      progressData.personalRecords = personalRecords;
+    }
+    else if (activeTab === 'bodyComp') {
+      progressData.bodyMeasurements = userProfile?.bodyMeasurements;
+      progressData.weightHistory = userProfile?.weightHistory;
+      progressData.bodyFatHistory = userProfile?.bodyFatHistory;
+      progressData.measurementHistory = userProfile?.measurementHistory;
+    }
+    
+    // Navigate to chat with the data
+    navigate('/chat', { 
+      state: { 
+        progressShared: true,
+        message: `I'd like to discuss my ${activeTab} progress data.`,
+        progressData: progressData
+      } 
+    });
+  };
 
   // Load user profile and workout history on component mount
   useEffect(() => {
@@ -474,54 +515,66 @@ const ProgressPage = () => {
               </div>
             </div>
             
-            <div className="relative">
-              <button
-                onClick={() => setShowTimeFilter(!showTimeFilter)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <Filter className="w-4 h-4" />
-                {timeRange === 'all' ? 'All Time' : timeRange === 'month' ? 'Last Month' : 'Last Week'}
-                <ChevronDown className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-3">
+              {/* Time filter button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowTimeFilter(!showTimeFilter)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                  {timeRange === 'all' ? 'All Time' : timeRange === 'month' ? 'Last Month' : 'Last Week'}
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                
+                <AnimatePresence>
+                  {showTimeFilter && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10"
+                    >
+                      <button
+                        onClick={() => {
+                          setTimeRange('all');
+                          setShowTimeFilter(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                      >
+                        All Time
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTimeRange('month');
+                          setShowTimeFilter(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                      >
+                        Last Month
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTimeRange('week');
+                          setShowTimeFilter(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                      >
+                        Last Week
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               
-              <AnimatePresence>
-                {showTimeFilter && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10"
-                  >
-                    <button
-                      onClick={() => {
-                        setTimeRange('all');
-                        setShowTimeFilter(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
-                    >
-                      All Time
-                    </button>
-                    <button
-                      onClick={() => {
-                        setTimeRange('month');
-                        setShowTimeFilter(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
-                    >
-                      Last Month
-                    </button>
-                    <button
-                      onClick={() => {
-                        setTimeRange('week');
-                        setShowTimeFilter(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
-                    >
-                      Last Week
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Share with Max button */}
+              <button
+                onClick={handleShareWithMax}
+                className="flex items-center gap-2 px-4 py-2 bg-[#4A90E2] text-white rounded-lg hover:bg-[#357ABD] transition-colors"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Share with Max
+              </button>
             </div>
           </div>
         </motion.div>

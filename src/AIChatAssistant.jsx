@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2, X, Send, ImagePlus, XCircle, Plus, Menu,
   Trash2, MessageSquare, UserCircle, Dumbbell, ArrowRight, Camera,
-  Clock, ChevronRight, AlertCircle
+  Clock, ChevronRight, AlertCircle, Activity
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import ProgressDataContent from './components/progress/ProgressDataContent';
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%234A90E2'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
 
@@ -219,6 +220,7 @@ const AIChatAssistant = () => {
   const [canSend, setCanSend] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(true);
   const [expandedWorkouts, setExpandedWorkouts] = useState({});
+  const [expandedProgress, setExpandedProgress] = useState({});
   
   // New state for notification/toast
   const [showNotification, setShowNotification] = useState(false);
@@ -229,19 +231,49 @@ const AIChatAssistant = () => {
   const REQUEST_COOLDOWN = 2000;
   const messagesEndRef = useRef(null);
 
-  // Check for message from workout page
+  // Check for message from workout page or progress page
   useEffect(() => {
-    if (location.state?.message || location.state?.workout) {
+    if (location.state?.message || location.state?.workout || location.state?.progressShared) {
       let message = location.state.message || '';
       
       // If there's workout data, format it for display
       if (location.state.workout) {
         setInitialMessage(`${message}\n\n[Workout: ${location.state.workout.name}]\n${location.state.workoutDetails}`);
-      } else {
+      } 
+      // If there's progress data, prepare it for display
+      else if (location.state.progressShared) {
+        // Just set the message, the progress data will be handled separately
+        setInitialMessage(message);
+        
+        // Add a new message with the progress data
+        if (activeConversationId && location.state.progressData) {
+          const userMessage = {
+            id: Date.now(),
+            type: 'user',
+            content: JSON.stringify({
+              text: message,
+              progressData: location.state.progressData
+            }),
+            progressShared: true,
+            pendingResponse: true
+          };
+          
+          // Update conversation with user message
+          setProfileConversations(prev => ({
+            ...prev,
+            [activeConversationId]: {
+              ...prev[activeConversationId],
+              messages: [...prev[activeConversationId].messages, userMessage],
+              lastUpdated: Date.now()
+            }
+          }));
+        }
+      } 
+      else {
         setInitialMessage(message);
       }
     }
-  }, [location.state]);
+  }, [location.state, activeConversationId]);
 
   // Set the input field when initialMessage changes
   useEffect(() => {
@@ -378,14 +410,14 @@ const AIChatAssistant = () => {
       setIsAnalyzing(true);
       
       // Create temporary preview URL for immediate display
-const tempUrl = URL.createObjectURL(file);
-setPreviewUrl(tempUrl);
+      const tempUrl = URL.createObjectURL(file);
+      setPreviewUrl(tempUrl);
 
-// Once we have the base64 image, update the preview to use it instead
-// This ensures what you see in preview is exactly what will be stored
-const base64Image = await resizeImage(file);
-setSelectedImage({ file, base64: base64Image });
-setPreviewUrl(base64Image); // Update preview to use the base64 image
+      // Once we have the base64 image, update the preview to use it instead
+      // This ensures what you see in preview is exactly what will be stored
+      const base64Image = await resizeImage(file);
+      setSelectedImage({ file, base64: base64Image });
+      setPreviewUrl(base64Image); // Update preview to use the base64 image
       
       try {
         // Compress and convert to base64 for storage
@@ -589,7 +621,7 @@ setPreviewUrl(base64Image); // Update preview to use the base64 image
                         }}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <MessageSquare className="w-5 h-5 text-[#4A90E2] flex-shrink-0" />
+                          <MessageSquare className={`w-5 h-5 ${conversation.id === activeConversationId ? 'text-[#4A90E2]' : 'text-gray-500'}`} />
                           <div className="truncate">
                             <div className="font-medium text-gray-800 truncate">
                               {conversation.title}
@@ -688,9 +720,10 @@ setPreviewUrl(base64Image); // Update preview to use the base64 image
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {activeConversationId &&
                 profileConversations[activeConversationId]?.messages.map((message) => {
-                  // Check if message might contain workout data
+                  // Check if message might contain workout data or progress data
                   let messageContent = message.content;
                   let workoutData = null;
+                  let progressData = null;
                   
                   if (message.workoutShared && typeof message.content === 'string') {
                     try {
@@ -702,6 +735,19 @@ setPreviewUrl(base64Image); // Update preview to use the base64 image
                     } catch (e) {
                       // Not JSON or not in the expected format, use as is
                       console.log("Error parsing workout data", e);
+                    }
+                  }
+                  
+                  // Handle progress data
+                  if (message.progressShared && typeof message.content === 'string') {
+                    try {
+                      const parsedContent = JSON.parse(message.content);
+                      if (parsedContent.progressData && parsedContent.text) {
+                        progressData = parsedContent.progressData;
+                        messageContent = parsedContent.text || "";
+                      }
+                    } catch (e) {
+                      console.log("Error parsing progress data", e);
                     }
                   }
                   
@@ -734,7 +780,7 @@ setPreviewUrl(base64Image); // Update preview to use the base64 image
                           </span>
                         </div>
                         
-                        {/* Render image if present - now using base64 string directly */}
+                        {/* Render image if present */}
                         {message.type === 'user' && message.imageUrl && (
                           <div className="mb-3">
                             <img
@@ -742,6 +788,47 @@ setPreviewUrl(base64Image); // Update preview to use the base64 image
                               alt="User uploaded"
                               className="max-h-48 w-auto rounded-lg object-cover shadow-md"
                             />
+                          </div>
+                        )}
+                        
+                        {/* Render progress data if present */}
+                        {progressData && (
+                          <div className="mb-3">
+                            <div 
+                              className="bg-[#E8F4FF] border border-[#B8D8F8] rounded-lg overflow-hidden cursor-pointer"
+                              onClick={() => setExpandedProgress(prev => ({
+                                ...prev,
+                                [message.id]: !prev[message.id]
+                              }))}
+                            >
+                              <div className="p-3 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Activity className="w-4 h-4 text-[#4A90E2]" />
+                                  <span className="font-medium text-[#4A90E2]">
+                                    {progressData.title} shared
+                                  </span>
+                                </div>
+                                <ChevronRight className={`w-5 h-5 text-[#4A90E2] transition-transform ${
+                                  expandedProgress[message.id] ? 'rotate-90' : ''
+                                }`} />
+                              </div>
+                              
+                              {/* Expandable progress details */}
+                              <AnimatePresence>
+                                {expandedProgress[message.id] && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="border-t border-[#B8D8F8]"
+                                  >
+                                    <div className="p-3 text-sm">
+                                      <ProgressDataContent data={progressData} />
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
                           </div>
                         )}
                         
