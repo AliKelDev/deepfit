@@ -241,34 +241,90 @@ const AIChatAssistant = () => {
         setInitialMessage(`${message}\n\n[Workout: ${location.state.workout.name}]\n${location.state.workoutDetails}`);
       } 
       // If there's progress data, prepare it for display
-      else if (location.state.progressShared) {
-        // Just set the message, the progress data will be handled separately
-        setInitialMessage(message);
+else if (location.state.progressShared) {
+  // Just set the message, the progress data will be handled separately
+  setInitialMessage(message);
+  
+  // Add a new message with the progress data and send it automatically
+  if (activeConversationId && location.state.progressData) {
+    const userMessage = {
+      id: Date.now(),
+      type: 'user',
+      content: JSON.stringify({
+        text: message,
+        progressData: location.state.progressData
+      }),
+      progressShared: true
+    };
+    
+    // Add user message to conversation
+    const updatedMessages = [...profileConversations[activeConversationId].messages, userMessage];
+    
+    // Update conversation with user message
+    setProfileConversations(prev => ({
+      ...prev,
+      [activeConversationId]: {
+        ...prev[activeConversationId],
+        messages: updatedMessages,
+        lastUpdated: Date.now()
+      }
+    }));
+    
+    // Send the message to get AI response
+    (async () => {
+      setIsLoading(true);
+      
+      try {
+        const response = await fetch('/.netlify/functions/ai-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: updatedMessages,
+            userProfile: activeProfile
+          })
+        });
+
+        if (!response.ok) throw new Error('Chat request failed');
+
+        const data = await response.json();
+        const aiResponse = `${data.content}\n\n_— Max_`;
         
-        // Add a new message with the progress data
-        if (activeConversationId && location.state.progressData) {
-          const userMessage = {
-            id: Date.now(),
-            type: 'user',
-            content: JSON.stringify({
-              text: message,
-              progressData: location.state.progressData
-            }),
-            progressShared: true,
-            pendingResponse: true
-          };
-          
-          // Update conversation with user message
-          setProfileConversations(prev => ({
-            ...prev,
-            [activeConversationId]: {
-              ...prev[activeConversationId],
-              messages: [...prev[activeConversationId].messages, userMessage],
-              lastUpdated: Date.now()
-            }
-          }));
-        }
-      } 
+        // Update conversation with AI response
+        setProfileConversations(prev => ({
+          ...prev,
+          [activeConversationId]: {
+            ...prev[activeConversationId],
+            messages: [...prev[activeConversationId].messages, {
+              id: Date.now() + 1,
+              type: 'ai',
+              content: aiResponse
+            }],
+            lastUpdated: Date.now()
+          }
+        }));
+      } catch (error) {
+        console.error('Error auto-sending message:', error);
+        
+        // Add error message to conversation
+        setProfileConversations(prev => ({
+          ...prev,
+          [activeConversationId]: {
+            ...prev[activeConversationId],
+            messages: [...prev[activeConversationId].messages, {
+              id: Date.now(),
+              type: 'ai',
+              content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+              isError: true
+            }],
+            lastUpdated: Date.now()
+          }
+        }));
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }
+}
       else {
         setInitialMessage(message);
       }
