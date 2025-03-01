@@ -12,6 +12,30 @@ export const handler = async function (event) {
       // Add safety checks for array properties
       const physicalLimitations = userProfile.physicalLimitations || [];
       const equipment = userProfile.equipment || [];
+
+      // Format height based on the user's preferred unit
+      let heightString = '';
+      if (userProfile.heightUnit === 'cm' && userProfile.height) {
+        heightString = `${userProfile.height} cm`;
+      } else if (userProfile.heightUnit === 'ft/in' && userProfile.heightFeet) {
+        heightString = `${userProfile.heightFeet}'${userProfile.heightInches || 0}"`;
+      }
+
+      // Format weight with unit
+      const weightString = userProfile.weight ? `${userProfile.weight} ${userProfile.weightUnit || 'kg'}` : '';
+      
+      // Format body fat percentage
+      const bodyFatString = userProfile.bodyFat ? `${userProfile.bodyFat}%` : '';
+
+      // Body measurements
+      const bodyMeasurements = userProfile.bodyMeasurements || {};
+      let measurementsString = '';
+      if (Object.values(bodyMeasurements).some(value => value)) {
+        measurementsString = Object.entries(bodyMeasurements)
+          .filter(([_, value]) => value)
+          .map(([key, value]) => `${key}: ${value} cm`)
+          .join(', ');
+      }
       
       profileContext = `
 IMPORTANT - USER CONTEXT:
@@ -23,6 +47,10 @@ USER PROFILE:
 - Fitness Level: ${fitnessLevel}
 - Physical Limitations: ${physicalLimitations.join(', ')}${userProfile.otherLimitations ? `, ${userProfile.otherLimitations}` : ''}
 - Available Equipment: ${equipment.join(', ')}
+${heightString ? `- Height: ${heightString}` : ''}
+${weightString ? `- Weight: ${weightString}` : ''}
+${bodyFatString ? `- Body Fat: ${bodyFatString}` : ''}
+${measurementsString ? `- Body Measurements: ${measurementsString}` : ''}
 ${userProfile.description ? `- Personal Details: ${userProfile.description}` : ''}
 
 GUIDELINES FOR USER INFORMATION:
@@ -30,6 +58,7 @@ GUIDELINES FOR USER INFORMATION:
 2. Consider their fitness level when suggesting exercises
 3. Be mindful of their physical limitations
 4. Address them by name occasionally to maintain a personal connection
+5. Use their body composition data to provide more tailored advice when discussing nutrition, specific workouts, or progress tracking
 `;
     }
 
@@ -55,6 +84,7 @@ ${profileContext}
 - Include sets, reps, and rest periods
 - Format with title, equipment needed, warm-up, main workout, and cool-down sections
 - Consider the user's profile details (fitness level, limitations, equipment)
+- If body composition data is available, you can tailor the workout to support their specific goals
 
 **When having a general conversation:**
 - Respond naturally to any topic, not just fitness-related ones
