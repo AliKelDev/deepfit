@@ -12,14 +12,62 @@ import {
   Award,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Filter,
   Calendar as CalendarIcon,
   Zap,
   Clock as ClockIcon,
   Target,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  Ruler,
+  Scale,
+  Percent
 } from 'lucide-react';
+
+// Import or define the MeasurementTrend component
+const MeasurementTrend = ({ history, label, color = '#4A90E2' }) => {
+  if (!history || history.length < 2) return null;
+  
+  const sortedHistory = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const maxValue = Math.max(...sortedHistory.map(entry => parseFloat(entry.value)));
+  const minValue = Math.min(...sortedHistory.map(entry => parseFloat(entry.value)));
+  const range = maxValue - minValue;
+  const padding = range * 0.1; // 10% padding
+  
+  const getY = (value) => {
+    // Normalize to 0-100 range for percentage height
+    if (range === 0) return 50; // If all values are the same
+    return 100 - ((value - minValue + padding/2) / (range + padding) * 100);
+  };
+  
+  const points = sortedHistory.map((entry, index) => {
+    const x = (index / (sortedHistory.length - 1)) * 100;
+    const y = getY(parseFloat(entry.value));
+    return `${x},${y}`;
+  }).join(' ');
+  
+  return (
+    <div className="mt-2">
+      <div className="text-sm font-medium text-gray-700 mb-1">{label} Trend</div>
+      <div className="relative h-16 w-full bg-gray-50 border border-gray-100 rounded overflow-hidden">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
+          <polyline
+            points={points}
+            fill="none"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <div className="absolute bottom-1 right-2 text-xs text-gray-500">
+          {sortedHistory.length} entries
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ProgressPage = () => {
   const navigate = useNavigate();
@@ -34,6 +82,17 @@ const ProgressPage = () => {
   const [personalRecords, setPersonalRecords] = useState([]);
   const [weeklyWorkouts, setWeeklyWorkouts] = useState([]);
   const [showTimeFilter, setShowTimeFilter] = useState(false);
+  
+  // Body Composition states
+  const [showWeightHistory, setShowWeightHistory] = useState(false);
+  const [showBodyFatHistory, setShowBodyFatHistory] = useState(false);
+  const [showMeasurementHistory, setShowMeasurementHistory] = useState({
+    chest: false,
+    waist: false,
+    hips: false,
+    thighs: false,
+    arms: false
+  });
 
   // Load user profile and workout history on component mount
   useEffect(() => {
@@ -278,6 +337,53 @@ const ProgressPage = () => {
     };
   };
 
+  // Toggle history visibility for body composition sections
+  const toggleHistoryVisibility = (type, key = null) => {
+    if (type === 'weight') {
+      setShowWeightHistory(prev => !prev);
+    } else if (type === 'bodyFat') {
+      setShowBodyFatHistory(prev => !prev);
+    } else if (type === 'measurement' && key) {
+      setShowMeasurementHistory(prev => ({
+        ...prev,
+        [key]: !prev[key]
+      }));
+    }
+  };
+
+  // Format history entries for display
+  const renderHistoryEntries = (history, unit = "") => {
+    if (!history || history.length === 0) {
+      return <div className="text-sm text-gray-500 italic">No history entries yet</div>;
+    }
+    
+    const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    return (
+      <div className="max-h-32 overflow-y-auto mt-1">
+        {sortedHistory.map((entry, index) => (
+          <div key={index} className="text-sm text-gray-600 flex justify-between border-b border-gray-100 py-1">
+            <span>{new Date(entry.date).toLocaleDateString()}</span>
+            <span>{entry.value} {entry.unit || unit}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Format height for display
+  const formatHeight = (profile) => {
+    if (!profile) return 'Not set';
+    
+    if (profile.heightUnit === 'cm' && profile.height) {
+      return `${profile.height} cm`;
+    } else if (profile.heightUnit === 'ft/in' && profile.heightFeet) {
+      return `${profile.heightFeet}' ${profile.heightInches || 0}"`;
+    }
+    
+    return 'Not set';
+  };
+
   // If no user profile exists, show redirect to profile creation
   if (!userProfile && !loading) {
     return (
@@ -422,9 +528,9 @@ const ProgressPage = () => {
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
-          <div className="flex border-b border-gray-200">
+          <div className="flex flex-wrap border-b border-gray-200">
             <button
-              className={`flex-1 py-4 px-6 font-medium transition-colors ${
+              className={`flex-1 py-4 px-3 sm:px-6 font-medium transition-colors text-sm sm:text-base ${
                 activeTab === 'overview' ? "text-[#4A90E2] border-b-2 border-[#4A90E2]" : "text-gray-600 hover:bg-gray-50"
               }`}
               onClick={() => setActiveTab('overview')}
@@ -432,7 +538,7 @@ const ProgressPage = () => {
               Overview
             </button>
             <button
-              className={`flex-1 py-4 px-6 font-medium transition-colors ${
+              className={`flex-1 py-4 px-3 sm:px-6 font-medium transition-colors text-sm sm:text-base ${
                 activeTab === 'exercises' ? "text-[#4A90E2] border-b-2 border-[#4A90E2]" : "text-gray-600 hover:bg-gray-50"
               }`}
               onClick={() => setActiveTab('exercises')}
@@ -440,12 +546,20 @@ const ProgressPage = () => {
               Exercise Progress
             </button>
             <button
-              className={`flex-1 py-4 px-6 font-medium transition-colors ${
+              className={`flex-1 py-4 px-3 sm:px-6 font-medium transition-colors text-sm sm:text-base ${
                 activeTab === 'records' ? "text-[#4A90E2] border-b-2 border-[#4A90E2]" : "text-gray-600 hover:bg-gray-50"
               }`}
               onClick={() => setActiveTab('records')}
             >
               Personal Records
+            </button>
+            <button
+              className={`flex-1 py-4 px-3 sm:px-6 font-medium transition-colors text-sm sm:text-base ${
+                activeTab === 'bodyComp' ? "text-[#4A90E2] border-b-2 border-[#4A90E2]" : "text-gray-600 hover:bg-gray-50"
+              }`}
+              onClick={() => setActiveTab('bodyComp')}
+            >
+              Body Composition
             </button>
           </div>
 
@@ -854,6 +968,307 @@ const ProgressPage = () => {
                     </p>
                   </div>
                 )}
+              </motion.div>
+            )}
+
+            {/* Body Composition Tab */}
+            {activeTab === 'bodyComp' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-6"
+              >
+                <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <Ruler className="w-6 h-6 text-[#4A90E2]" />
+                  Body Composition Tracking
+                </h2>
+
+                {/* Basic stats cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="bg-blue-100 p-2 rounded-lg">
+                        <Ruler className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <span className="text-gray-600 text-sm">Height</span>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {formatHeight(userProfile)}
+                    </div>
+                  </motion.div>
+                  
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="bg-green-100 p-2 rounded-lg">
+                        <Scale className="w-5 h-5 text-green-600" />
+                      </div>
+                      <span className="text-gray-600 text-sm">Current Weight</span>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {userProfile?.weight ? `${userProfile.weight} ${userProfile.weightUnit || 'kg'}` : 'Not set'}
+                    </div>
+                    {userProfile?.weightHistory && userProfile.weightHistory.length > 0 && (
+                      <div 
+                        onClick={() => toggleHistoryVisibility('weight')}
+                        className="text-xs text-[#4A90E2] mt-1 cursor-pointer flex items-center"
+                      >
+                        {showWeightHistory ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
+                        {userProfile.weightHistory.length} entries
+                      </div>
+                    )}
+                  </motion.div>
+                  
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="bg-purple-100 p-2 rounded-lg">
+                        <Percent className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <span className="text-gray-600 text-sm">Body Fat</span>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {userProfile?.bodyFat ? `${userProfile.bodyFat}%` : 'Not set'}
+                    </div>
+                    {userProfile?.bodyFatHistory && userProfile.bodyFatHistory.length > 0 && (
+                      <div 
+                        onClick={() => toggleHistoryVisibility('bodyFat')}
+                        className="text-xs text-[#4A90E2] mt-1 cursor-pointer flex items-center"
+                      >
+                        {showBodyFatHistory ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
+                        {userProfile.bodyFatHistory.length} entries
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+
+                {/* Weight History */}
+                {userProfile?.weightHistory && userProfile.weightHistory.length > 0 && showWeightHistory && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <Scale className="w-5 h-5 text-[#4A90E2]" />
+                      Weight History
+                    </h3>
+                    
+                    {/* Weight History Trend */}
+                    <MeasurementTrend 
+                      history={userProfile.weightHistory} 
+                      label="Weight" 
+                      color="#22c55e" 
+                    />
+                    
+                    {/* Weight History Table */}
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">History Entries</h4>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        {renderHistoryEntries(userProfile.weightHistory, userProfile.weightUnit)}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+                
+                {/* Body Fat History */}
+                {userProfile?.bodyFatHistory && userProfile.bodyFatHistory.length > 0 && showBodyFatHistory && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <Percent className="w-5 h-5 text-[#4A90E2]" />
+                      Body Fat History
+                    </h3>
+                    
+                    {/* Body Fat History Trend */}
+                    <MeasurementTrend 
+                      history={userProfile.bodyFatHistory} 
+                      label="Body Fat" 
+                      color="#a855f7" 
+                    />
+                    
+                    {/* Body Fat History Table */}
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">History Entries</h4>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        {renderHistoryEntries(userProfile.bodyFatHistory, "%")}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+                
+                {/* Body Measurements Section */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm"
+                >
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Ruler className="w-5 h-5 text-[#4A90E2]" />
+                    Body Measurements
+                  </h3>
+                  
+                  {userProfile?.bodyMeasurements ? (
+                    <div className="space-y-8">
+                      {/* Measurements Cards */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        {['chest', 'waist', 'hips', 'thighs', 'arms'].map((part) => (
+                          <div key={part} className="bg-gray-50 rounded-lg p-4">
+                            <h4 className="text-sm font-medium text-gray-700 capitalize mb-1">{part}</h4>
+                            <div className="text-xl font-bold text-gray-800">
+                              {userProfile.bodyMeasurements[part] ? `${userProfile.bodyMeasurements[part]} cm` : '-'}
+                            </div>
+                            {userProfile.measurementHistory && 
+                             userProfile.measurementHistory[part] && 
+                             userProfile.measurementHistory[part].length > 0 && (
+                              <div 
+                                onClick={() => toggleHistoryVisibility('measurement', part)}
+                                className="text-xs text-[#4A90E2] mt-1 cursor-pointer flex items-center"
+                              >
+                                {showMeasurementHistory[part] ? 
+                                  <ChevronUp className="w-3 h-3 mr-1" /> : 
+                                  <ChevronDown className="w-3 h-3 mr-1" />
+                                }
+                                History
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Measurement History Sections */}
+                      {['chest', 'waist', 'hips', 'thighs', 'arms'].map((part) => (
+                        userProfile.measurementHistory && 
+                        userProfile.measurementHistory[part] && 
+                        userProfile.measurementHistory[part].length > 0 &&
+                        showMeasurementHistory[part] && (
+                          <div key={`history-${part}`} className="border-t border-gray-200 pt-4">
+                            <h4 className="text-md font-medium text-gray-800 capitalize mb-3 flex items-center gap-2">
+                              <div className="w-2 h-2 bg-[#4A90E2] rounded-full"></div>
+                              {part} Measurement History
+                            </h4>
+                            
+                            {/* Measurement Trend */}
+                            <MeasurementTrend 
+                              history={userProfile.measurementHistory[part]} 
+                              label={part.charAt(0).toUpperCase() + part.slice(1)} 
+                              color="#4A90E2" 
+                            />
+                            
+                            {/* Measurement History Table */}
+                            <div className="mt-3 bg-gray-50 rounded-lg p-3">
+                              {renderHistoryEntries(userProfile.measurementHistory[part], "cm")}
+                            </div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No body measurement data available</p>
+                      <button
+                        onClick={() => navigate('/profile')}
+                        className="mt-4 px-4 py-2 bg-[#4A90E2] text-white rounded-lg text-sm"
+                      >
+                        Add Measurements
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+                
+                {/* Composition Improvements */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm"
+                >
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-[#4A90E2]" />
+                    Body Composition Insights
+                  </h3>
+                  
+                  {(userProfile?.weightHistory?.length > 1 || 
+                    userProfile?.bodyFatHistory?.length > 1 || 
+                    Object.values(userProfile?.measurementHistory || {}).some(arr => arr.length > 1)) ? (
+                    <div className="space-y-4">
+                      {/* Show insights based on available data */}
+                      {userProfile?.weightHistory?.length > 1 && (
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                          <h4 className="text-blue-800 font-medium">Weight Trend</h4>
+                          <p className="text-blue-700 text-sm mt-1">
+                            {userProfile.weightHistory[userProfile.weightHistory.length - 1].value > 
+                             userProfile.weightHistory[0].value ? 
+                              "You've been gaining weight over time. If this aligns with your goals, keep it up!" : 
+                              "You've been losing weight over time. If this aligns with your goals, you're on the right track!"}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {userProfile?.bodyFatHistory?.length > 1 && (
+                        <div className="bg-purple-50 border-l-4 border-purple-400 p-4 rounded-r-lg">
+                          <h4 className="text-purple-800 font-medium">Body Composition Changes</h4>
+                          <p className="text-purple-700 text-sm mt-1">
+                            {userProfile.bodyFatHistory[userProfile.bodyFatHistory.length - 1].value < 
+                             userProfile.bodyFatHistory[0].value ? 
+                              "Your body fat percentage is decreasing. Great progress on improving your body composition!" : 
+                              "Your body fat percentage is increasing. Consider adjusting your nutrition and training if fat loss is a goal."}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {userProfile?.measurementHistory?.waist?.length > 1 && (
+                        <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded-r-lg">
+                          <h4 className="text-green-800 font-medium">Waist Measurement</h4>
+                          <p className="text-green-700 text-sm mt-1">
+                            {userProfile.measurementHistory.waist[userProfile.measurementHistory.waist.length - 1].value < 
+                             userProfile.measurementHistory.waist[0].value ? 
+                              "Your waist measurement is decreasing, which is often a good indicator of fat loss." : 
+                              "Your waist measurement is increasing. This could be related to your current training and nutrition approach."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <AlertTriangle className="w-5 h-5 text-amber-500" />
+                      <p>More measurements needed for personalized insights</p>
+                    </div>
+                  )}
+                  
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <h4 className="text-md font-medium text-gray-800 mb-3">Recommendations</h4>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <ChevronRight className="w-4 h-4 text-[#4A90E2] mt-0.5 flex-shrink-0" />
+                        <span>Track your measurements consistently (every 2-4 weeks) for the most accurate progress tracking</span>
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <ChevronRight className="w-4 h-4 text-[#4A90E2] mt-0.5 flex-shrink-0" />
+                        <span>Take measurements at the same time of day, preferably in the morning before eating</span>
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-gray-600">
+                        <ChevronRight className="w-4 h-4 text-[#4A90E2] mt-0.5 flex-shrink-0" />
+                        <span>Remember that body composition changes may be more meaningful than scale weight alone</span>
+                      </li>
+                    </ul>
+                  </div>
+                </motion.div>
               </motion.div>
             )}
           </div>
