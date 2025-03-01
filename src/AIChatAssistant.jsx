@@ -378,8 +378,14 @@ const AIChatAssistant = () => {
       setIsAnalyzing(true);
       
       // Create temporary preview URL for immediate display
-      const tempUrl = URL.createObjectURL(file);
-      setPreviewUrl(tempUrl);
+const tempUrl = URL.createObjectURL(file);
+setPreviewUrl(tempUrl);
+
+// Once we have the base64 image, update the preview to use it instead
+// This ensures what you see in preview is exactly what will be stored
+const base64Image = await resizeImage(file);
+setSelectedImage({ file, base64: base64Image });
+setPreviewUrl(base64Image); // Update preview to use the base64 image
       
       try {
         // Compress and convert to base64 for storage
