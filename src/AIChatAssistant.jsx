@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2, X, Send, ImagePlus, XCircle, Plus, Menu,
   Trash2, MessageSquare, UserCircle, Dumbbell, ArrowRight, Camera,
-  Clock, ChevronRight
+  Clock, ChevronRight, AlertCircle
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -178,9 +178,14 @@ const AIChatAssistant = () => {
   const [previewUrl, setPreviewUrl] = useState('');
   const [imageAnalysis, setImageAnalysis] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [canSend, setCanSend] = useState(true);
+  const [canSend, setCanSend] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(true);
   const [expandedWorkouts, setExpandedWorkouts] = useState({});
+  
+  // New state for notification/toast
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const notificationTimeoutRef = useRef(null);
 
   const lastRequestTime = useRef(0);
   const REQUEST_COOLDOWN = 2000;
@@ -208,29 +213,30 @@ const AIChatAssistant = () => {
     }
   }, [initialMessage]);
 
-  // Add this useEffect to control when the send button is enabled
+  // Update canSend state based on current message content - strictly require text
   useEffect(() => {
-    // Determine if the send button should be enabled
-    const shouldEnableSend = () => {
-      // Don't allow sending if no text and image is still analyzing
-      if (selectedImage && !currentMessage.trim() && isAnalyzing) {
-        return false;
-      }
-      
-      // Don't allow sending if there's an image but no text and no analysis
-      if (selectedImage && !currentMessage.trim() && !imageAnalysis) {
-        return false;
-      }
-      
-      // In all other cases, allow sending if there's either text or an analyzed image
-      return (currentMessage.trim() || (selectedImage && imageAnalysis));
-    };
-    
-    setCanSend(shouldEnableSend());
-  }, [currentMessage, selectedImage, isAnalyzing, imageAnalysis]);
+    // Only enable sending if there's text content
+    setCanSend(currentMessage.trim().length > 0 && !isLoading);
+  }, [currentMessage, isLoading]);
 
   const handleNavigateToProfile = () => {
     navigate('/profile');
+  };
+
+  // Show notification/toast function
+  const showToast = (message, duration = 3000) => {
+    setNotificationMessage(message);
+    setShowNotification(true);
+    
+    // Clear any existing timeout
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+    
+    // Set timeout to hide notification
+    notificationTimeoutRef.current = setTimeout(() => {
+      setShowNotification(false);
+    }, duration);
   };
 
   // Load profile and check if first time
@@ -286,6 +292,15 @@ const AIChatAssistant = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [profileConversations]);
+
+  // Clean up notification timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleStartFirstConversation = () => {
     if (activeProfile) {
@@ -362,7 +377,16 @@ const AIChatAssistant = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!canSend || isLoading || !activeConversationId) return;
+    // Check if message is empty (no text)
+    if (!currentMessage.trim()) {
+      // Show toast notification if trying to send without text
+      showToast(selectedImage 
+        ? "Please add a message to send along with your image" 
+        : "Please type a message before sending");
+      return;
+    }
+    
+    if (isLoading || !activeConversationId) return;
 
     const now = Date.now();
     if (now - lastRequestTime.current < REQUEST_COOLDOWN) {
@@ -371,7 +395,6 @@ const AIChatAssistant = () => {
     }
     lastRequestTime.current = now;
     setIsLoading(true);
-    setCanSend(false);
 
     // Added pendingResponse flag to prevent duplicate sending
     const userMessage = {
@@ -445,7 +468,7 @@ const AIChatAssistant = () => {
     } finally {
       setIsLoading(false);
       setTimeout(() => {
-        setCanSend(true);
+        setCanSend(currentMessage.trim().length > 0);  // Re-enable send button if text is present
       }, REQUEST_COOLDOWN);
     }
   };
@@ -566,6 +589,21 @@ const AIChatAssistant = () => {
                 <h3 className="font-semibold text-gray-800">Max - Your Personal Coach</h3>
               </div>
             </div>
+
+            {/* Toast Notification */}
+            <AnimatePresence>
+              {showNotification && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-[#FFF4CC] border border-[#FFD666] px-4 py-2 rounded-lg shadow-md z-50 flex items-center gap-2"
+                >
+                  <AlertCircle className="w-5 h-5 text-[#F59E0B]" />
+                  <span className="text-[#B45309] text-sm">{notificationMessage}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Mobile Overlay Background with Button */}
             <AnimatePresence>
@@ -788,15 +826,13 @@ const AIChatAssistant = () => {
                   value={currentMessage}
                   onChange={(e) => setCurrentMessage(e.target.value)}
                   placeholder={
-                    selectedImage && isAnalyzing 
-                      ? "Analyzing image... please wait or add text" 
-                      : selectedImage && !imageAnalysis 
-                        ? "Please add text to send with your image" 
-                        : "Ask about workouts or share a form check video..."
+                    selectedImage 
+                      ? "Add a message to send with your image..." 
+                      : "Ask Max about workouts or share a fitness question..."
                   }
                   className="flex-1 p-3 border border-[#B8D8F8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4A90E2] resize-none h-12"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && canSend && !isLoading) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSendMessage();
                     }
@@ -811,7 +847,6 @@ const AIChatAssistant = () => {
                       : 'bg-gray-400 cursor-not-allowed'
                   }`}
                   whileTap={canSend && !isLoading ? { scale: 0.95 } : {}}
-                  disabled={!canSend || isLoading}
                 >
                   <Send className="w-5 h-5" />
                 </motion.button>
