@@ -230,106 +230,134 @@ const AIChatAssistant = () => {
   const lastRequestTime = useRef(0);
   const REQUEST_COOLDOWN = 2000;
   const messagesEndRef = useRef(null);
+  
+  // Track if we've already processed the current progress data to avoid duplicate sends
+  const processedProgressDataRef = useRef(false);
+  // Store the ID of the last processed data to prevent duplicate processing
+  const lastProcessedDataIdRef = useRef(null);
 
   // Check for message from workout page or progress page
   useEffect(() => {
-    if (location.state?.message || location.state?.workout || location.state?.progressShared) {
-      let message = location.state.message || '';
-      
-      // If there's workout data, format it for display
+    // Only proceed if we have an active conversation and the location state hasn't been processed yet
+    if (activeConversationId && location.state) {
+      // If there's a workout - handle it the normal way
       if (location.state.workout) {
+        const message = location.state.message || '';
         setInitialMessage(`${message}\n\n[Workout: ${location.state.workout.name}]\n${location.state.workoutDetails}`);
       } 
-      // If there's progress data, prepare it for display
-else if (location.state.progressShared) {
-  // Just set the message, the progress data will be handled separately
-  setInitialMessage(message);
-  
-  // Add a new message with the progress data and send it automatically
-  if (activeConversationId && location.state.progressData) {
-    const userMessage = {
-      id: Date.now(),
-      type: 'user',
-      content: JSON.stringify({
-        text: message,
-        progressData: location.state.progressData
-      }),
-      progressShared: true
-    };
-    
-    // Add user message to conversation
-    const updatedMessages = [...profileConversations[activeConversationId].messages, userMessage];
-    
-    // Update conversation with user message
-    setProfileConversations(prev => ({
-      ...prev,
-      [activeConversationId]: {
-        ...prev[activeConversationId],
-        messages: updatedMessages,
-        lastUpdated: Date.now()
-      }
-    }));
-    
-    // Send the message to get AI response
-    (async () => {
-      setIsLoading(true);
-      
-      try {
-        const response = await fetch('/.netlify/functions/ai-chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: updatedMessages,
-            userProfile: activeProfile
-          })
-        });
-
-        if (!response.ok) throw new Error('Chat request failed');
-
-        const data = await response.json();
-        const aiResponse = `${data.content}\n\n_— Max_`;
+      // If there's progress data and it hasn't been processed yet
+      else if (location.state.progressShared && location.state.progressData && !processedProgressDataRef.current) {
+        // Generate a unique ID for this progress data if not available
+        const progressDataId = location.state.progressData.id || `progress-${Date.now()}`;
         
-        // Update conversation with AI response
+        // Check if we've already processed this exact data
+        if (lastProcessedDataIdRef.current === progressDataId) {
+          return;
+        }
+        
+        // Mark as processed and store the ID
+        processedProgressDataRef.current = true;
+        lastProcessedDataIdRef.current = progressDataId;
+        
+        // Prepare the user message
+        const userMessage = {
+          id: Date.now(),
+          type: 'user',
+          content: JSON.stringify({
+            text: location.state.message || "I'd like to discuss my progress data.",
+            progressData: location.state.progressData
+          }),
+          progressShared: true
+        };
+        
+        // Add user message to conversation
         setProfileConversations(prev => ({
           ...prev,
           [activeConversationId]: {
             ...prev[activeConversationId],
-            messages: [...prev[activeConversationId].messages, {
-              id: Date.now() + 1,
-              type: 'ai',
-              content: aiResponse
-            }],
+            messages: [...prev[activeConversationId].messages, userMessage],
             lastUpdated: Date.now()
           }
         }));
-      } catch (error) {
-        console.error('Error auto-sending message:', error);
         
-        // Add error message to conversation
-        setProfileConversations(prev => ({
-          ...prev,
-          [activeConversationId]: {
-            ...prev[activeConversationId],
-            messages: [...prev[activeConversationId].messages, {
-              id: Date.now(),
-              type: 'ai',
-              content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
-              isError: true
-            }],
-            lastUpdated: Date.now()
+        // Show a toast notification that progress is being shared
+        showToast("Sharing progress data with Max...");
+        
+        // Auto-send the message to get AI response
+        (async () => {
+          setIsLoading(true);
+          
+          try {
+            const response = await fetch('/.netlify/functions/ai-chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                messages: [...profileConversations[activeConversationId].messages, userMessage],
+                userProfile: activeProfile
+              })
+            });
+
+            if (!response.ok) throw new Error('Chat request failed');
+
+            const data = await response.json();
+            const aiResponse = `${data.content}\n\n_— Max_`;
+            
+            // Update conversation with AI response
+            setProfileConversations(prev => ({
+              ...prev,
+              [activeConversationId]: {
+                ...prev[activeConversationId],
+                messages: [...prev[activeConversationId].messages, {
+                  id: Date.now() + 1,
+                  type: 'ai',
+                  content: aiResponse
+                }],
+                lastUpdated: Date.now()
+              }
+            }));
+            
+            showToast("Max has analyzed your progress data", 2000);
+            
+          } catch (error) {
+            console.error('Error auto-sending message:', error);
+            
+            // Add error message to conversation
+            setProfileConversations(prev => ({
+              ...prev,
+              [activeConversationId]: {
+                ...prev[activeConversationId],
+                messages: [...prev[activeConversationId].messages, {
+                  id: Date.now(),
+                  type: 'ai',
+                  content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+                  isError: true
+                }],
+                lastUpdated: Date.now()
+              }
+            }));
+            
+            showToast("Couldn't connect to Max. Please try again later.", 3000);
+            
+          } finally {
+            setIsLoading(false);
+            
+            // Very important: Clear the location state to prevent re-processing
+            // This replaces the current history entry with one that has no progress data
+            navigate(location.pathname, { replace: true, state: {} });
           }
-        }));
-      } finally {
-        setIsLoading(false);
+        })();
       }
-    })();
-  }
-}
-      else {
-        setInitialMessage(message);
+      // Handle regular text messages if present
+      else if (location.state.message && !location.state.progressShared) {
+        setInitialMessage(location.state.message);
       }
     }
-  }, [location.state, activeConversationId]);
+  }, [location.state, activeConversationId, activeProfile, navigate, profileConversations]);
+
+  // Reset the processed data flag when the active conversation changes
+  useEffect(() => {
+    processedProgressDataRef.current = false;
+  }, [activeConversationId]);
 
   // Set the input field when initialMessage changes
   useEffect(() => {
@@ -458,6 +486,9 @@ else if (location.state.progressShared) {
     }));
     setActiveConversationId(newId);
     setIsSidebarOpen(false);
+    
+    // Reset progress data processing flag when creating a new conversation
+    processedProgressDataRef.current = false;
   };
 
   const handleImageSelect = async (e) => {
@@ -674,6 +705,8 @@ else if (location.state.progressShared) {
                         onClick={() => {
                           setActiveConversationId(conversation.id);
                           setIsSidebarOpen(false);
+                          // Reset progress data processing flag when switching conversations
+                          processedProgressDataRef.current = false;
                         }}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
