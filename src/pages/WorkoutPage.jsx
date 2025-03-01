@@ -1,6 +1,8 @@
 // src/pages/WorkoutPage.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Dumbbell } from 'lucide-react';
 import Header from '../components/workout/Header';
 import TabNavigation from '../components/workout/TabNavigation';
 import MyWorkoutsTab from '../components/workout/tabs/MyWorkoutsTab';
@@ -412,7 +414,25 @@ const WorkoutPage = () => {
   if (!userProfile) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#E6F3FF] to-[#D1E9FF] py-12 px-4 flex items-center justify-center">
-        {/* Profile creation prompt component would go here */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl p-8 shadow-xl max-w-md w-full text-center"
+        >
+          <div className="w-20 h-20 bg-[#E8F4FF] rounded-full mx-auto flex items-center justify-center mb-6">
+            <Dumbbell className="w-12 h-12 text-[#4A90E2]" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">Create Your Profile</h1>
+          <p className="text-gray-600 mb-6">
+            Before you can start training, you need to create an athlete profile. This helps Max personalize your workouts.
+          </p>
+          <button
+            onClick={() => navigate('/profile')}
+            className="px-6 py-3 bg-[#4A90E2] text-white rounded-lg font-medium hover:bg-[#357ABD] transition-colors shadow-md mx-auto"
+          >
+            Create Profile
+          </button>
+        </motion.div>
       </div>
     );
   }
