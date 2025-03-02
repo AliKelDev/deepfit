@@ -3,6 +3,23 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  NODE_VERSION = "18"
+
+[functions]
+  node_bundler = "esbuild"
+
+[dev]
+  framework = "vite"
+  targetPort = 5173
+  port = 8888
+  publish = "dist"
+
+[[headers]]
+  for = "/sitemap.xml"
+    [headers.values]
+      Content-Type = "application/xml"
+
 [[headers]]
   for = "/favicon/site.webmanifest"
   [headers.values]
@@ -27,15 +44,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
-[functions]
-  node_bundler = "esbuild"
-
-[dev]
-  framework = "vite"
-  targetPort = 5173
-  port = 8888
-  publish = "dist"
-
-[build.environment]
-  NODE_VERSION = "18"
