@@ -222,6 +222,9 @@ const AIChatAssistant = () => {
   const [expandedWorkouts, setExpandedWorkouts] = useState({});
   const [expandedProgress, setExpandedProgress] = useState({});
   
+  // New state for progress data processing tracking
+  const [processingId, setProcessingId] = useState(null);
+  
   // New state for notification/toast
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
@@ -231,133 +234,138 @@ const AIChatAssistant = () => {
   const REQUEST_COOLDOWN = 2000;
   const messagesEndRef = useRef(null);
   
-  // Track if we've already processed the current progress data to avoid duplicate sends
-  const processedProgressDataRef = useRef(false);
   // Store the ID of the last processed data to prevent duplicate processing
   const lastProcessedDataIdRef = useRef(null);
 
   // Check for message from workout page or progress page
   useEffect(() => {
-    // Only proceed if we have an active conversation and the location state hasn't been processed yet
-    if (activeConversationId && location.state) {
-      // If there's a workout - handle it the normal way
-      if (location.state.workout) {
-        const message = location.state.message || '';
-        setInitialMessage(`${message}\n\n[Workout: ${location.state.workout.name}]\n${location.state.workoutDetails}`);
-      } 
-      // If there's progress data and it hasn't been processed yet
-      else if (location.state.progressShared && location.state.progressData && !processedProgressDataRef.current) {
-        // Generate a unique ID for this progress data if not available
-        const progressDataId = location.state.progressData.id || `progress-${Date.now()}`;
-        
-        // Check if we've already processed this exact data
-        if (lastProcessedDataIdRef.current === progressDataId) {
-          return;
-        }
-        
-        // Mark as processed and store the ID
-        processedProgressDataRef.current = true;
-        lastProcessedDataIdRef.current = progressDataId;
-        
-        // Prepare the user message
-        const userMessage = {
-          id: Date.now(),
-          type: 'user',
-          content: JSON.stringify({
-            text: location.state.message || "I'd like to discuss my progress data.",
-            progressData: location.state.progressData
-          }),
-          progressShared: true
-        };
-        
-        // Add user message to conversation
-        setProfileConversations(prev => ({
-          ...prev,
-          [activeConversationId]: {
-            ...prev[activeConversationId],
-            messages: [...prev[activeConversationId].messages, userMessage],
-            lastUpdated: Date.now()
-          }
-        }));
-        
-        // Show a toast notification that progress is being shared
-        showToast("Sharing progress data with Max...");
-        
-        // Auto-send the message to get AI response
-        (async () => {
-          setIsLoading(true);
-          
-          try {
-            const response = await fetch('/.netlify/functions/ai-chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                messages: [...profileConversations[activeConversationId].messages, userMessage],
-                userProfile: activeProfile
-              })
-            });
-
-            if (!response.ok) throw new Error('Chat request failed');
-
-            const data = await response.json();
-            const aiResponse = `${data.content}\n\n_— Max_`;
-            
-            // Update conversation with AI response
-            setProfileConversations(prev => ({
-              ...prev,
-              [activeConversationId]: {
-                ...prev[activeConversationId],
-                messages: [...prev[activeConversationId].messages, {
-                  id: Date.now() + 1,
-                  type: 'ai',
-                  content: aiResponse
-                }],
-                lastUpdated: Date.now()
-              }
-            }));
-            
-            showToast("Max has analyzed your progress data", 2000);
-            
-          } catch (error) {
-            console.error('Error auto-sending message:', error);
-            
-            // Add error message to conversation
-            setProfileConversations(prev => ({
-              ...prev,
-              [activeConversationId]: {
-                ...prev[activeConversationId],
-                messages: [...prev[activeConversationId].messages, {
-                  id: Date.now(),
-                  type: 'ai',
-                  content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
-                  isError: true
-                }],
-                lastUpdated: Date.now()
-              }
-            }));
-            
-            showToast("Couldn't connect to Max. Please try again later.", 3000);
-            
-          } finally {
-            setIsLoading(false);
-            
-            // Very important: Clear the location state to prevent re-processing
-            // This replaces the current history entry with one that has no progress data
-            navigate(location.pathname, { replace: true, state: {} });
-          }
-        })();
-      }
-      // Handle regular text messages if present
-      else if (location.state.message && !location.state.progressShared) {
-        setInitialMessage(location.state.message);
-      }
+    // Handle workout data
+    if (activeConversationId && location.state && location.state.workout) {
+      const message = location.state.message || '';
+      setInitialMessage(`${message}\n\n[Workout: ${location.state.workout.name}]\n${location.state.workoutDetails}`);
+      navigate(location.pathname, { replace: true, state: {} });
+    } 
+    // Handle regular text messages if present (and not part of progress data)
+    else if (activeConversationId && location.state && location.state.message && !location.state.progressShared) {
+      setInitialMessage(location.state.message);
+      navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, activeConversationId, activeProfile, navigate, profileConversations]);
+  }, [location.state, activeConversationId, navigate]);
 
-  // Reset the processed data flag when the active conversation changes
+  // Handle progress data separately to fix the double-sending issue
   useEffect(() => {
-    processedProgressDataRef.current = false;
-  }, [activeConversationId]);
+    // Check if we have active conversation and progress data in location state
+    if (activeConversationId && 
+        location.state && 
+        location.state.progressShared && 
+        location.state.progressData) {
+      
+      // Generate a consistent ID for this progress data
+      const progressDataId = location.state.progressData.id || 
+                            `progress-${JSON.stringify(location.state.progressData).slice(0, 50)}`;
+      
+      // If we're already processing this data or have processed it before, skip
+      if (processingId === progressDataId || 
+          lastProcessedDataIdRef.current === progressDataId) {
+        return;
+      }
+      
+      // Mark as currently processing - this is state-based so React respects it across renders
+      setProcessingId(progressDataId);
+      // Also store as processed for future reference
+      lastProcessedDataIdRef.current = progressDataId;
+      
+      // Clear the location state IMMEDIATELY to prevent re-processing in subsequent renders
+      const message = location.state.message || "I'd like to discuss my progress data.";
+      const progressData = {...location.state.progressData}; // Make a copy first
+      navigate(location.pathname, { replace: true, state: {} });
+      
+      // Prepare the user message
+      const userMessage = {
+        id: Date.now(),
+        type: 'user',
+        content: JSON.stringify({
+          text: message,
+          progressData: progressData
+        }),
+        progressShared: true
+      };
+      
+      // Add user message to conversation
+      setProfileConversations(prev => ({
+        ...prev,
+        [activeConversationId]: {
+          ...prev[activeConversationId],
+          messages: [...prev[activeConversationId].messages, userMessage],
+          lastUpdated: Date.now()
+        }
+      }));
+      
+      // Show a toast notification that progress is being shared
+      showToast("Sharing progress data with Max...");
+      
+      // Auto-send the message to get AI response
+      (async () => {
+        setIsLoading(true);
+        
+        try {
+          const response = await fetch('/.netlify/functions/ai-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [...profileConversations[activeConversationId].messages, userMessage],
+              userProfile: activeProfile
+            })
+          });
+
+          if (!response.ok) throw new Error('Chat request failed');
+
+          const data = await response.json();
+          const aiResponse = `${data.content}\n\n_— Max_`;
+          
+          // Update conversation with AI response
+          setProfileConversations(prev => ({
+            ...prev,
+            [activeConversationId]: {
+              ...prev[activeConversationId],
+              messages: [...prev[activeConversationId].messages, {
+                id: Date.now() + 1,
+                type: 'ai',
+                content: aiResponse
+              }],
+              lastUpdated: Date.now()
+            }
+          }));
+          
+          showToast("Max has analyzed your progress data", 2000);
+          
+        } catch (error) {
+          console.error('Error auto-sending message:', error);
+          
+          // Add error message to conversation
+          setProfileConversations(prev => ({
+            ...prev,
+            [activeConversationId]: {
+              ...prev[activeConversationId],
+              messages: [...prev[activeConversationId].messages, {
+                id: Date.now(),
+                type: 'ai',
+                content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+                isError: true
+              }],
+              lastUpdated: Date.now()
+            }
+          }));
+          
+          showToast("Couldn't connect to Max. Please try again later.", 3000);
+          
+        } finally {
+          setIsLoading(false);
+          setProcessingId(null); // Reset processing state regardless of outcome
+        }
+      })();
+    }
+  }, [location.state, activeConversationId, activeProfile, navigate, processingId]);
 
   // Set the input field when initialMessage changes
   useEffect(() => {
@@ -487,8 +495,9 @@ const AIChatAssistant = () => {
     setActiveConversationId(newId);
     setIsSidebarOpen(false);
     
-    // Reset progress data processing flag when creating a new conversation
-    processedProgressDataRef.current = false;
+    // Reset processing state when creating a new conversation
+    setProcessingId(null);
+    lastProcessedDataIdRef.current = null;
   };
 
   const handleImageSelect = async (e) => {
@@ -705,8 +714,8 @@ const AIChatAssistant = () => {
                         onClick={() => {
                           setActiveConversationId(conversation.id);
                           setIsSidebarOpen(false);
-                          // Reset progress data processing flag when switching conversations
-                          processedProgressDataRef.current = false;
+                          // Reset processing state when switching conversations
+                          setProcessingId(null);
                         }}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
