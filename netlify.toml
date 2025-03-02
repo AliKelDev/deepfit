@@ -35,6 +35,13 @@
     Referrer-Policy = "no-referrer-when-downgrade"
     Content-Security-Policy = "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; frame-ancestors 'self' https:;"
 
+# New specific redirect for sitemap.xml
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/sitemap.xml"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
