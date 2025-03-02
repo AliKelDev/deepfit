@@ -1,31 +1,69 @@
 {
-  "name": "DeepFit - AI-Powered Fitness Assistant",
-  "short_name": "DeepFit",
-  "description": "Get personalized fitness assistance from Max, your AI coach",
+  "name": "Max AI Coach - Personal AI Fitness Trainer",
+  "short_name": "Max AI Coach",
+  "description": "AI-powered personal fitness trainer with workout tracking, form analysis, and progress analytics",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
-  "background_color": "#FFF5EB",
-  "theme_color": "#B87333",
+  "background_color": "#E6F3FF",
+  "theme_color": "#4A90E2",
+  "orientation": "portrait-primary",
+  "categories": ["fitness", "health", "sports", "lifestyle"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/favicon/web-app-manifest-192x192.png",
+      "src": "/favicon/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "/favicon/web-app-manifest-512x512.png",
+      "src": "/favicon/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home-screen.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "platform": "wide",
+      "label": "Home screen of Max AI Coach"
     },
     {
-      "src": "/favicon/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png"
+      "src": "/screenshots/workout-tracking.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "platform": "wide",
+      "label": "Workout tracking interface"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Workout",
+      "url": "/workout",
+      "description": "Begin a new workout session"
     },
     {
-      "src": "/favicon/favicon-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png"
+      "name": "Chat with Max",
+      "url": "/chat",
+      "description": "Get fitness advice from your AI coach"
     }
   ]
 }
