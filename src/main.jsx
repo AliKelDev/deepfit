@@ -214,7 +214,7 @@ const App = () => {
                     </p>
                     <div className="flex space-x-4">
                       <a href="https://deep-chef.netlify.app/" className="text-sm text-[#4A90E2] hover:underline">DeepChef</a>
-                      <a href="https://webpixelle3.netlify.app/" className="text-sm text-[#4A90E2] hover:underline">WebPixel</a>
+                      <a href="https://pixelle3-alikearn.com/" className="text-sm text-[#4A90E2] hover:underline">Pixelle3</a>
                       <a href="https://linkforge-alikeldev.netlify.app/" className="text-sm text-[#4A90E2] hover:underline">LinkForge</a>
                     </div>
                   </div>

@@ -229,7 +229,7 @@ const Homepage = () => {
           <p className="text-sm text-gray-600 mt-2">
             Part of the Alikearn Studio AI assistant family alongside 
             <a href="https://deep-chef.netlify.app/" className="text-[#4A90E2] ml-1 hover:underline">DeepChef</a>, 
-            <a href="https://webpixelle3.netlify.app/" className="text-[#4A90E2] ml-1 hover:underline">WebPixel</a>, and
+            <a href="https://pixelle3-alikearn.com/" className="text-[#4A90E2] ml-1 hover:underline">Pixelle3</a>, and
             <a href="https://linkforge-alikeldev.netlify.app/" className="text-[#4A90E2] ml-1 hover:underline">LinkForge</a>
           </p>
         </section>
