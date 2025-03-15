@@ -22,9 +22,14 @@ const WorkoutPage = () => {
   const [activeWorkout, setActiveWorkout] = useState(null);
   const [workoutHistory, setWorkoutHistory] = useState([]);
   const [currentTab, setCurrentTab] = useState("my-workouts");
+  
+  // Updated timer implementation
   const [stopwatchRunning, setStopwatchRunning] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const stopwatchInterval = useRef(null);
+  const [workoutStartTime, setWorkoutStartTime] = useState(null);
+  const [pausedTime, setPausedTime] = useState(0); // Store accumulated time when paused
+  const [displayTime, setDisplayTime] = useState(0);
+  const timerInterval = useRef(null);
+  
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
@@ -57,6 +62,31 @@ const WorkoutPage = () => {
     if (storedHistory) {
       setWorkoutHistory(JSON.parse(storedHistory));
     }
+    
+    // Load active workout and timer state
+    const profileId = JSON.parse(storedProfile)?.id;
+    if (profileId) {
+      const storedActiveWorkout = localStorage.getItem(`active_workout_${profileId}`);
+      if (storedActiveWorkout) {
+        setActiveWorkout(JSON.parse(storedActiveWorkout));
+        
+        // Restore timer state
+        const storedStartTime = localStorage.getItem(`workout_start_time_${profileId}`);
+        const storedPausedTime = localStorage.getItem(`workout_paused_time_${profileId}`);
+        const storedTimerRunning = localStorage.getItem(`workout_timer_running_${profileId}`);
+        
+        if (storedStartTime && storedTimerRunning === 'true') {
+          setWorkoutStartTime(parseInt(storedStartTime, 10));
+          setPausedTime(parseInt(storedPausedTime || '0', 10));
+          setStopwatchRunning(true);
+          setCurrentTab("active");
+        } else if (storedPausedTime) {
+          setPausedTime(parseInt(storedPausedTime, 10));
+          setDisplayTime(parseInt(storedPausedTime, 10));
+          setCurrentTab("active");
+        }
+      }
+    }
   }, []);
 
   // Save workouts when they change
@@ -72,19 +102,51 @@ const WorkoutPage = () => {
       localStorage.setItem(`workout_history_${userProfile.id}`, JSON.stringify(workoutHistory));
     }
   }, [workoutHistory, userProfile]);
-
-  // Stopwatch functionality
+  
+  // Save active workout when it changes
   useEffect(() => {
-    if (stopwatchRunning) {
-      stopwatchInterval.current = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
+    if (userProfile && activeWorkout) {
+      localStorage.setItem(`active_workout_${userProfile.id}`, JSON.stringify(activeWorkout));
+    } else if (userProfile) {
+      localStorage.removeItem(`active_workout_${userProfile.id}`);
+    }
+  }, [activeWorkout, userProfile]);
+  
+  // Save timer state
+  useEffect(() => {
+    if (!userProfile) return;
+    
+    if (workoutStartTime) {
+      localStorage.setItem(`workout_start_time_${userProfile.id}`, workoutStartTime.toString());
     } else {
-      clearInterval(stopwatchInterval.current);
+      localStorage.removeItem(`workout_start_time_${userProfile.id}`);
+    }
+    
+    localStorage.setItem(`workout_paused_time_${userProfile.id}`, pausedTime.toString());
+    localStorage.setItem(`workout_timer_running_${userProfile.id}`, stopwatchRunning.toString());
+  }, [workoutStartTime, pausedTime, stopwatchRunning, userProfile]);
+
+  // Updated timer logic using timestamps
+  useEffect(() => {
+    if (stopwatchRunning && workoutStartTime) {
+      // Update the display time immediately
+      const updateTimer = () => {
+        const now = Date.now();
+        const elapsed = Math.floor((now - workoutStartTime) / 1000) + pausedTime;
+        setDisplayTime(elapsed);
+      };
+      
+      // Initial update
+      updateTimer();
+      
+      // Then set up the interval to update the display
+      timerInterval.current = setInterval(updateTimer, 1000);
+    } else {
+      clearInterval(timerInterval.current);
     }
 
-    return () => clearInterval(stopwatchInterval.current);
-  }, [stopwatchRunning]);
+    return () => clearInterval(timerInterval.current);
+  }, [stopwatchRunning, workoutStartTime, pausedTime]);
 
   const formatTime = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
@@ -120,6 +182,22 @@ const WorkoutPage = () => {
     return formattedData;
   };
 
+  // Toggle timer
+  const toggleStopwatch = () => {
+    if (stopwatchRunning) {
+      // Pause: store accumulated time
+      const currentElapsed = Math.floor((Date.now() - workoutStartTime) / 1000) + pausedTime;
+      setPausedTime(currentElapsed);
+      setDisplayTime(currentElapsed);
+      setWorkoutStartTime(null);
+      setStopwatchRunning(false);
+    } else {
+      // Resume: start a new reference time, keeping the accumulated paused time
+      setWorkoutStartTime(Date.now());
+      setStopwatchRunning(true);
+    }
+  };
+
   // Quick Start Workout functionality
   const handleQuickStartWorkout = () => {
     // Create an empty workout with today's date
@@ -135,11 +213,14 @@ const WorkoutPage = () => {
       isCompleted: false
     };
     
-    // Set as active workout and start timer
+    // Reset and start the timer
+    setPausedTime(0);
+    setWorkoutStartTime(Date.now());
+    setStopwatchRunning(true);
+    
+    // Set as active workout
     setActiveWorkout(emptyWorkout);
     setCurrentTab("active");
-    setStopwatchRunning(true);
-    setElapsedTime(0);
   };
 
   const handleStartWorkout = (workout) => {
@@ -159,32 +240,62 @@ const WorkoutPage = () => {
       isCompleted: false
     };
     
+    // Reset and start the timer
+    setPausedTime(0);
+    setWorkoutStartTime(Date.now());
+    setStopwatchRunning(true);
+    
     setActiveWorkout(workoutWithTracking);
     setCurrentTab("active");
-    setStopwatchRunning(true);
-    setElapsedTime(0);
   };
 
   const handleCompleteWorkout = () => {
+    if (!activeWorkout) return;
+    
+    // Calculate total duration
+    const totalDuration = stopwatchRunning
+      ? Math.floor((Date.now() - workoutStartTime) / 1000) + pausedTime
+      : pausedTime;
+    
     // Create a history entry
     const completedWorkout = {
       ...activeWorkout,
       endTime: new Date().toISOString(),
-      duration: elapsedTime,
+      duration: totalDuration,
       isCompleted: true
     };
     
     setWorkoutHistory(prev => [completedWorkout, ...prev]);
     setActiveWorkout(null);
     setStopwatchRunning(false);
+    setWorkoutStartTime(null);
+    setPausedTime(0);
+    setDisplayTime(0);
     setCurrentTab("my-workouts");
+    
+    // Clean up localStorage timer values
+    if (userProfile) {
+      localStorage.removeItem(`workout_start_time_${userProfile.id}`);
+      localStorage.removeItem(`workout_paused_time_${userProfile.id}`);
+      localStorage.removeItem(`workout_timer_running_${userProfile.id}`);
+    }
   };
 
   const handleCancelWorkout = () => {
     if (confirm("Are you sure you want to cancel this workout? Progress will not be saved.")) {
       setActiveWorkout(null);
       setStopwatchRunning(false);
+      setWorkoutStartTime(null);
+      setPausedTime(0);
+      setDisplayTime(0);
       setCurrentTab("my-workouts");
+      
+      // Clean up localStorage timer values
+      if (userProfile) {
+        localStorage.removeItem(`workout_start_time_${userProfile.id}`);
+        localStorage.removeItem(`workout_paused_time_${userProfile.id}`);
+        localStorage.removeItem(`workout_timer_running_${userProfile.id}`);
+      }
     }
   };
 
@@ -499,8 +610,8 @@ const WorkoutPage = () => {
                   activeWorkout={activeWorkout}
                   setActiveWorkout={setActiveWorkout}
                   stopwatchRunning={stopwatchRunning}
-                  setStopwatchRunning={setStopwatchRunning}
-                  elapsedTime={elapsedTime}
+                  setStopwatchRunning={toggleStopwatch} // Use the new toggle function
+                  elapsedTime={displayTime} // Use the new display time
                   formatTime={formatTime}
                   handleSetCompleted={handleSetCompleted}
                   handleCancelWorkout={handleCancelWorkout}
@@ -540,7 +651,7 @@ const WorkoutPage = () => {
         activeWorkout={activeWorkout}
         workoutHistory={workoutHistory}
         formatTime={formatTime}
-        elapsedTime={elapsedTime}
+        elapsedTime={displayTime} // Use the new display time
       />
     </div>
   );
