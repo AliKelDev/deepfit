@@ -10,6 +10,7 @@ import CreateWorkoutTab from '../components/workout/tabs/CreateWorkoutTab';
 import HistoryTab from '../components/workout/tabs/HistoryTab';
 import ActiveWorkoutTab from '../components/workout/tabs/ActiveWorkoutTab.jsx';
 import ExerciseSelectionModal from '../components/workout/modals/ExerciseSelectionModal';
+import CustomExerciseModal from '../components/workout/modals/CustomExerciseModal';
 import QuickChatModal from '../components/workout/modals/QuickChatModal';
 
 // Import the exercise database
@@ -31,6 +32,7 @@ const WorkoutPage = () => {
   const timerInterval = useRef(null);
   
   const [showExerciseModal, setShowExerciseModal] = useState(false);
+  const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [quickMessage, setQuickMessage] = useState("");
@@ -348,6 +350,15 @@ const WorkoutPage = () => {
     setShowExerciseModal(false);
   };
 
+  const handleAddCustomExercise = (customExercise) => {
+    // Add the custom exercise to either the active workout or new workout being created
+    if (activeWorkout) {
+      handleAddExerciseToActiveWorkout(customExercise);
+    } else {
+      handleAddExercise(customExercise);
+    }
+  };
+
   const handleRemoveExercise = (index) => {
     setNewWorkout(prev => ({
       ...prev,
@@ -636,6 +647,13 @@ const WorkoutPage = () => {
         setSelectedCategory={setSelectedCategory}
         handleAddExercise={activeWorkout ? handleAddExerciseToActiveWorkout : handleAddExercise}
         EXERCISE_DATABASE={EXERCISE_DATABASE}
+        setShowCustomExerciseModal={setShowCustomExerciseModal}
+      />
+
+      <CustomExerciseModal 
+        showCustomExerciseModal={showCustomExerciseModal}
+        setShowCustomExerciseModal={setShowCustomExerciseModal}
+        addCustomExercise={handleAddCustomExercise}
       />
 
       <QuickChatModal 

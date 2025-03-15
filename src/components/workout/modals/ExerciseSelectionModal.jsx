@@ -1,7 +1,7 @@
 // src/components/workout/modals/ExerciseSelectionModal.jsx
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Dumbbell } from 'lucide-react';
+import { X, Dumbbell, Plus } from 'lucide-react';
 
 const ExerciseSelectionModal = ({ 
   showExerciseModal, 
@@ -9,7 +9,8 @@ const ExerciseSelectionModal = ({
   selectedCategory, 
   setSelectedCategory, 
   handleAddExercise, 
-  EXERCISE_DATABASE 
+  EXERCISE_DATABASE,
+  setShowCustomExerciseModal
 }) => {
   return (
     <AnimatePresence>
@@ -38,6 +39,18 @@ const ExerciseSelectionModal = ({
             
             <div className="p-6 border-b border-gray-200">
               <div className="flex flex-wrap gap-2">
+                {/* Custom Exercise Button */}
+                <button
+                  onClick={() => {
+                    setShowExerciseModal(false);
+                    setShowCustomExerciseModal(true);
+                  }}
+                  className="px-4 py-2 rounded-full text-sm font-medium transition-colors bg-[#E8F4FF] text-[#4A90E2] hover:bg-[#D1E8FF] flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Custom
+                </button>
+
                 {Object.keys(EXERCISE_DATABASE).map(category => (
                   <button
                     key={category}

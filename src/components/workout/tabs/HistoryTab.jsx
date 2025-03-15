@@ -1,9 +1,16 @@
-// src/components/workout/tabs/HistoryTab.jsx (updated version)
+// src/components/workout/tabs/HistoryTab.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Edit } from 'lucide-react';
 
-const HistoryTab = ({ workoutHistory, formatTime, weightUnit, setCurrentTab, workouts }) => {
+const HistoryTab = ({ 
+  workoutHistory, 
+  formatTime, 
+  weightUnit, 
+  setCurrentTab, 
+  workouts, 
+  handleEditWorkout 
+}) => {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -41,11 +48,21 @@ const HistoryTab = ({ workoutHistory, formatTime, weightUnit, setCurrentTab, wor
                       {startDate.toLocaleDateString()} at {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 bg-[#E8F4FF] px-3 py-1 rounded-full self-start">
-                    <Clock className="w-4 h-4 text-[#4A90E2]" />
-                    <span className="text-sm font-medium text-[#4A90E2]">
-                      {formatTime(workout.duration)}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-[#E8F4FF] px-3 py-1 rounded-full">
+                      <Clock className="w-4 h-4 text-[#4A90E2]" />
+                      <span className="text-sm font-medium text-[#4A90E2]">
+                        {formatTime(workout.duration)}
+                      </span>
+                    </div>
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => handleEditWorkout(workout, index)}
+                      className="flex items-center gap-1 px-3 py-1 bg-[#E8F4FF] text-[#4A90E2] rounded-full hover:bg-[#D1E8FF] transition-colors"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit
+                    </button>
                   </div>
                 </div>
                 

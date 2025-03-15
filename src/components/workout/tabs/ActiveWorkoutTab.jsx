@@ -1,4 +1,4 @@
-// src/components/workout/tabs/ActiveWorkoutTab.jsx (final updated version)
+// src/components/workout/tabs/ActiveWorkoutTab.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Pause, Play, CheckCircle, RotateCcw, Plus, Save } from 'lucide-react';
@@ -107,18 +107,19 @@ const ActiveWorkoutTab = ({
                                 value={set.actualWeight}
                                 onChange={(e) => {
                                   const newActiveWorkout = { ...activeWorkout };
-                                  newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualWeight = e.target.value;
+                                  newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualWeight = parseFloat(e.target.value) || 0;
                                   setActiveWorkout(newActiveWorkout);
                                 }}
                                 className={`w-16 p-2 border rounded ${
                                   set.completed ? 'border-green-300 bg-green-50' : 'border-gray-300'
                                 }`}
                                 disabled={set.completed}
+                                placeholder="0"
                               />
                               <span className="ml-1 text-gray-500 text-xs">{weightUnit}</span>
                             </div>
                           </td>
-                          <td className="py-3 pr-4 whitespace-nowrap">{set.reps}</td>
+                          <td className="py-3 pr-4 whitespace-nowrap">{set.reps || 0}</td>
                           <td className="py-3 pr-4">
                             <input
                               type="number"
@@ -127,13 +128,13 @@ const ActiveWorkoutTab = ({
                               value={set.actualReps || ''}
                               onChange={(e) => {
                                 const newActiveWorkout = { ...activeWorkout };
-                                newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualReps = e.target.value;
+                                newActiveWorkout.exercises[exerciseIndex].sets[setIndex].actualReps = parseInt(e.target.value, 10) || 0;
                                 setActiveWorkout(newActiveWorkout);
                               }}
                               className={`w-16 p-2 border rounded ${
                                 set.completed ? 'border-green-300 bg-green-50' : 'border-gray-300'
                               }`}
-                              placeholder={set.reps}
+                              placeholder="0"
                               disabled={set.completed}
                             />
                           </td>
@@ -147,7 +148,7 @@ const ActiveWorkoutTab = ({
                               </button>
                             ) : (
                               <button
-                                onClick={() => handleSetCompleted(exerciseIndex, setIndex, true, set.actualReps || set.reps, set.actualWeight)}
+                                onClick={() => handleSetCompleted(exerciseIndex, setIndex, true, set.actualReps || 0, set.actualWeight)}
                                 className="p-2 text-gray-400 hover:text-green-600 transition-colors"
                               >
                                 <CheckCircle className="w-5 h-5" />
