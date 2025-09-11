@@ -90,6 +90,11 @@ const cacheFirstUseResources = (url) => {
 
 // Fetch event handler with different strategies for different resources
 self.addEventListener('fetch', event => {
+  // Don't cache POST requests (they can't be cached anyway)
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  
   const url = new URL(event.request.url);
   
   // API calls - Network first with timeout fallback
