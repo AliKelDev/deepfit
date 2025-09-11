@@ -576,18 +576,34 @@ const AIChatAssistant = () => {
       clearSelectedImage();
     }
 
-    try {
-      const response = await fetch('/.netlify/functions/ai-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...profileConversations[activeConversationId].messages, userMessage],
-          imageData: selectedImage?.base64 || null,
-          userProfile: activeProfile
-        })
-      });
+    // Retry logic for frontend
+    const retryFetch = async (retries = 3, delay = 1000) => {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          const response = await fetch('/.netlify/functions/ai-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [...profileConversations[activeConversationId].messages, userMessage],
+              imageData: selectedImage?.base64 || null,
+              userProfile: activeProfile
+            })
+          });
 
-      if (!response.ok) throw new Error('Chat request failed');
+          if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
+          return response;
+        } catch (error) {
+          console.log(`Attempt ${attempt} failed:`, error.message);
+          if (attempt === retries) throw error;
+          
+          // Wait before retrying with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, delay * attempt));
+        }
+      }
+    };
+
+    try {
+      const response = await retryFetch();
 
       const data = await response.json();
       const aiResponse = `${data.content}\n\n— Max`;
