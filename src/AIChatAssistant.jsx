@@ -6,6 +6,7 @@ import {
   Clock, ChevronRight, AlertCircle, Activity
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import ProgressDataContent from './components/progress/ProgressDataContent';
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%234A90E2'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
@@ -516,9 +517,6 @@ const AIChatAssistant = () => {
       setPreviewUrl(base64Image); // Update preview to use the base64 image
       
       try {
-        // Compress and convert to base64 for storage
-        const base64Image = await resizeImage(file);
-        setSelectedImage({ file, base64: base64Image });
         
         // Analyze the image
         const reader = new FileReader();
@@ -599,6 +597,7 @@ const AIChatAssistant = () => {
     }));
 
     setCurrentMessage('');
+    setImageAnalysis(''); // Clear image analysis after sending
 
     if (selectedImage) {
       clearSelectedImage();
@@ -694,7 +693,7 @@ const AIChatAssistant = () => {
                           {activeProfile.name}
                         </h2>
                         <p className="text-sm text-gray-600">
-                          Level {activeProfile.cookingLevel} Athlete
+                          Level {activeProfile.fitnessLevel} Athlete
                         </p>
                       </div>
                     </div>
@@ -991,14 +990,25 @@ const AIChatAssistant = () => {
                         )}
                         
                         {/* Regular message content */}
-                        <div className={`whitespace-pre-wrap ${message.isError ? 'text-red-600' : 'text-gray-700'}`}>
-                          {messageContent.split(/(\*\*.*?\*\*)/g).map((part, index) =>
-                            part.startsWith('**') && part.endsWith('**') ? (
-                              <strong key={index} className="font-semibold text-[#4A90E2]">{part.slice(2, -2)}</strong>
-                            ) : (
-                              <span key={index}>{part}</span>
-                            )
-                          )}
+                        <div className={`${message.isError ? 'text-red-600' : 'text-gray-700'}`}>
+                          <ReactMarkdown
+                            components={{
+                              strong: ({children}) => <strong className="font-semibold text-[#4A90E2]">{children}</strong>,
+                              p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                              ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                              ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                              li: ({children}) => <li className="ml-2">{children}</li>,
+                              code: ({inline, children}) => 
+                                inline ? 
+                                  <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code> :
+                                  <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto my-2"><code className="font-mono text-sm">{children}</code></pre>,
+                              h1: ({children}) => <h1 className="text-xl font-bold mb-2">{children}</h1>,
+                              h2: ({children}) => <h2 className="text-lg font-bold mb-2">{children}</h2>,
+                              h3: ({children}) => <h3 className="text-md font-bold mb-2">{children}</h3>
+                            }}
+                          >
+                            {messageContent}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </motion.div>
