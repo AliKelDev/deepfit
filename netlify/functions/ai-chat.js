@@ -1,7 +1,7 @@
 // netlify/functions/ai-chat.js
 export const handler = async function (event) {
   try {
-    const { messages, imageAnalysis, userProfile } = JSON.parse(event.body);
+    const { messages, imageData, userProfile } = JSON.parse(event.body);
     const geminiKey = process.env.GEMINI_API_KEY;
 
     // Create personalized profile context if profile exists
@@ -105,8 +105,8 @@ ${profileContext}
 - If appropriate, you can relate non-fitness topics back to health/fitness, but this isn't necessary
 - Use the user's name occasionally when it feels natural
 
-**When discussing an analyzed image:**
-- Reference what you can see in the image analysis
+**When discussing images:**
+- Analyze what you can see in any attached images
 - If fitness-related, offer form commentary appropriate to their level
 - If not fitness-related, respond naturally to the image content
 - Use the image context to enhance your responses
@@ -138,11 +138,8 @@ ${profileContext}
       });
     }
 
-    // Create the user prompt, incorporating image analysis if available
+    // Create the user prompt
     let userPrompt = messages && messages.length > 0 ? messages[messages.length - 1].content : "";
-    if (imageAnalysis) {
-      userPrompt = `[Image Analysis: ${imageAnalysis}]\n\n${userPrompt}`;
-    }
     if (userPrompt) {
       aiMessages.push({ role: 'user', content: userPrompt });
     }
@@ -159,9 +156,17 @@ ${profileContext}
           body: JSON.stringify({
             contents: [
               {
-                parts: aiMessages.map((m) => ({
-                  text: m.content,
-                })),
+                parts: [
+                  ...aiMessages.map((m) => ({
+                    text: m.content,
+                  })),
+                  ...(imageData ? [{
+                    inline_data: {
+                      mime_type: "image/jpeg",
+                      data: imageData.split(',')[1] // Remove data:image/jpeg;base64, prefix
+                    }
+                  }] : [])
+                ]
               },
             ],
           }),

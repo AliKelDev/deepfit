@@ -216,7 +216,6 @@ const AIChatAssistant = () => {
   const [currentMessage, setCurrentMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const [imageAnalysis, setImageAnalysis] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [canSend, setCanSend] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(true);
@@ -506,43 +505,19 @@ const AIChatAssistant = () => {
     if (file && file.type.startsWith('image/')) {
       setIsAnalyzing(true);
       
-      // Create temporary preview URL for immediate display
-      const tempUrl = URL.createObjectURL(file);
-      setPreviewUrl(tempUrl);
-
-      // Once we have the base64 image, update the preview to use it instead
-      // This ensures what you see in preview is exactly what will be stored
-      const base64Image = await resizeImage(file);
-      setSelectedImage({ file, base64: base64Image });
-      setPreviewUrl(base64Image); // Update preview to use the base64 image
-      
       try {
+        // Create temporary preview URL for immediate display
+        const tempUrl = URL.createObjectURL(file);
+        setPreviewUrl(tempUrl);
+
+        // Resize and compress image for storage
+        const base64Image = await resizeImage(file);
+        setSelectedImage({ file, base64: base64Image });
+        setPreviewUrl(base64Image); // Update preview to use the base64 image
         
-        // Analyze the image
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const base64String = reader.result.split(',')[1];
-          try {
-            const response = await fetch('/.netlify/functions/moondream-analysis', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imageBase64: base64String })
-            });
-
-            if (!response.ok) throw new Error('Image analysis failed');
-
-            const data = await response.json();
-            setImageAnalysis(data.caption);
-          } catch (error) {
-            console.error('Error analyzing image:', error);
-            setImageAnalysis('Failed to analyze image');
-          } finally {
-            setIsAnalyzing(false);
-          }
-        };
-        reader.readAsDataURL(file);
       } catch (error) {
         console.error('Error processing image:', error);
+      } finally {
         setIsAnalyzing(false);
       }
     }
@@ -551,7 +526,6 @@ const AIChatAssistant = () => {
   const clearSelectedImage = () => {
     setSelectedImage(null);
     setPreviewUrl('');
-    setImageAnalysis('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -597,7 +571,6 @@ const AIChatAssistant = () => {
     }));
 
     setCurrentMessage('');
-    setImageAnalysis(''); // Clear image analysis after sending
 
     if (selectedImage) {
       clearSelectedImage();
@@ -609,7 +582,7 @@ const AIChatAssistant = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...profileConversations[activeConversationId].messages, userMessage],
-          imageAnalysis: imageAnalysis,
+          imageData: selectedImage?.base64 || null,
           userProfile: activeProfile
         })
       });
