@@ -322,7 +322,7 @@ const AIChatAssistant = () => {
           if (!response.ok) throw new Error('Chat request failed');
 
           const data = await response.json();
-          const aiResponse = `${data.content}\n\n_— Max_`;
+          const aiResponse = `${data.content}\n\n— Max`;
           
           // Update conversation with AI response
           setProfileConversations(prev => ({
@@ -617,7 +617,7 @@ const AIChatAssistant = () => {
       if (!response.ok) throw new Error('Chat request failed');
 
       const data = await response.json();
-      const aiResponse = `${data.content}\n\n_— Max_`;
+      const aiResponse = `${data.content}\n\n— Max`;
       // Update conversation with AI response
       setProfileConversations(prev => ({
         ...prev,
@@ -994,6 +994,7 @@ const AIChatAssistant = () => {
                           <ReactMarkdown
                             components={{
                               strong: ({children}) => <strong className="font-semibold text-[#4A90E2]">{children}</strong>,
+                              em: ({children}) => <em className="italic text-gray-700">{children}</em>,
                               p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
                               ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
                               ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
