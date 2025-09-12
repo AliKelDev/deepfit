@@ -321,7 +321,7 @@ const AIChatAssistant = () => {
           if (!response.ok) throw new Error('Chat request failed');
 
           const data = await response.json();
-          const aiResponse = `${data.content}\n\n— Max`;
+          const aiResponse = data.content;
           
           // Update conversation with AI response
           setProfileConversations(prev => ({
@@ -606,7 +606,7 @@ const AIChatAssistant = () => {
       const response = await retryFetch();
 
       const data = await response.json();
-      const aiResponse = `${data.content}\n\n— Max`;
+      const aiResponse = data.content;
       // Update conversation with AI response
       setProfileConversations(prev => ({
         ...prev,
