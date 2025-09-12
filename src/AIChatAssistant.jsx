@@ -242,7 +242,88 @@ const AIChatAssistant = () => {
     // Handle workout data
     if (activeConversationId && location.state && location.state.workout) {
       const message = location.state.message || '';
-      setInitialMessage(`${message}\n\n[Workout: ${location.state.workout.name}]\n${location.state.workoutDetails}`);
+      const workoutDetails = location.state.workoutDetails || '';
+      
+      // Create structured workout message with proper formatting
+      const userMessage = {
+        id: Date.now(),
+        type: 'user',
+        content: JSON.stringify({
+          text: message,
+          workoutData: location.state.workout
+        }),
+        workoutShared: true
+      };
+      
+      // Add user message to conversation
+      setProfileConversations(prev => ({
+        ...prev,
+        [activeConversationId]: {
+          ...prev[activeConversationId],
+          messages: [...prev[activeConversationId].messages, userMessage],
+          lastUpdated: Date.now()
+        }
+      }));
+      
+      // Auto-send the message to get AI response
+      (async () => {
+        setIsLoading(true);
+        
+        try {
+          const response = await fetch('/.netlify/functions/ai-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [...profileConversations[activeConversationId].messages, {
+                ...userMessage,
+                content: `${message}\n\n${workoutDetails}` // Send formatted details to AI
+              }],
+              userProfile: activeProfile
+            })
+          });
+
+          if (!response.ok) throw new Error('Chat request failed');
+
+          const data = await response.json();
+          const aiResponse = data.content;
+          
+          // Update conversation with AI response
+          setProfileConversations(prev => ({
+            ...prev,
+            [activeConversationId]: {
+              ...prev[activeConversationId],
+              messages: [...prev[activeConversationId].messages, {
+                id: Date.now() + 1,
+                type: 'ai',
+                content: aiResponse
+              }],
+              lastUpdated: Date.now()
+            }
+          }));
+          
+        } catch (error) {
+          console.error('Error auto-sending workout message:', error);
+          
+          // Add error message to conversation
+          setProfileConversations(prev => ({
+            ...prev,
+            [activeConversationId]: {
+              ...prev[activeConversationId],
+              messages: [...prev[activeConversationId].messages, {
+                id: Date.now(),
+                type: 'ai',
+                content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+                isError: true
+              }],
+              lastUpdated: Date.now()
+            }
+          }));
+          
+        } finally {
+          setIsLoading(false);
+        }
+      })();
+      
       navigate(location.pathname, { replace: true, state: {} });
     } 
     // Handle regular text messages if present (and not part of progress data)
@@ -250,7 +331,7 @@ const AIChatAssistant = () => {
       setInitialMessage(location.state.message);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, activeConversationId, navigate]);
+  }, [location.state, activeConversationId, navigate, profileConversations, activeProfile]);
 
   // Handle progress data separately to fix the double-sending issue
   useEffect(() => {
@@ -922,22 +1003,37 @@ const AIChatAssistant = () => {
                         {workoutData && (
                           <div className="mb-3">
                             <div 
-                              className="bg-[#E8F4FF] border border-[#B8D8F8] rounded-lg overflow-hidden cursor-pointer"
+                              className="bg-gradient-to-r from-[#E8F4FF] to-[#F0F7FF] border border-[#B8D8F8] rounded-xl overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200 group"
                               onClick={() => setExpandedWorkouts(prev => ({
                                 ...prev,
                                 [workoutData.id]: !prev[workoutData.id]
                               }))}
                             >
-                              <div className="p-3 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Dumbbell className="w-4 h-4 text-[#4A90E2]" />
-                                  <span className="font-medium text-[#4A90E2]">
-                                    {workoutData.name} workout shared
-                                  </span>
+                              {/* Compact Header */}
+                              <div className="p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-[#4A90E2] rounded-full flex items-center justify-center shadow-sm">
+                                    <Dumbbell className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-gray-800 text-sm">
+                                      {workoutData.name}
+                                    </span>
+                                    <span className="text-xs text-gray-600">
+                                      {workoutData.date} • {workoutData.duration}
+                                    </span>
+                                  </div>
                                 </div>
-                                <ChevronRight className={`w-5 h-5 text-[#4A90E2] transition-transform ${
-                                  expandedWorkouts[workoutData.id] ? 'rotate-90' : ''
-                                }`} />
+                                <div className="flex items-center gap-2">
+                                  <div className="px-2 py-1 bg-[#4A90E2] bg-opacity-10 rounded-full">
+                                    <span className="text-xs font-medium text-[#4A90E2]">
+                                      Shared
+                                    </span>
+                                  </div>
+                                  <ChevronRight className={`w-4 h-4 text-[#4A90E2] transition-all duration-200 group-hover:text-[#357ABD] ${
+                                    expandedWorkouts[workoutData.id] ? 'rotate-90' : ''
+                                  }`} />
+                                </div>
                               </div>
                               
                               {/* Expandable workout details */}
@@ -947,26 +1043,33 @@ const AIChatAssistant = () => {
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: 'auto', opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.3, ease: "easeInOut" }}
                                     className="border-t border-[#B8D8F8]"
                                   >
-                                    <div className="p-3 text-sm">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <div className="text-gray-700">
-                                          {workoutData.date} at {workoutData.time}
+                                    <div className="p-4 bg-white bg-opacity-50">
+                                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                                        <div className="text-sm text-gray-700 font-medium">
+                                          Workout Details
                                         </div>
-                                        <div className="flex items-center gap-1 text-gray-600">
+                                        <div className="flex items-center gap-1 text-sm text-gray-600">
                                           <Clock className="w-3.5 h-3.5" />
-                                          <span>{workoutData.duration}</span>
+                                          <span>{workoutData.time}</span>
                                         </div>
                                       </div>
                                       
-                                      <div className="space-y-1">
+                                      <div className="space-y-2">
                                         {workoutData.exercises.map((ex, i) => (
-                                          <div key={i} className="flex items-center justify-between">
-                                            <span className="text-gray-700">{ex.name}</span>
-                                            <span className="text-gray-600 text-xs">
-                                              {ex.completed}/{ex.sets} sets
-                                            </span>
+                                          <div key={i} className="flex items-center justify-between p-2 bg-white bg-opacity-60 rounded-lg">
+                                            <span className="text-sm font-medium text-gray-800">{ex.name}</span>
+                                            <div className="flex items-center gap-2">
+                                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                                ex.completed === ex.sets 
+                                                  ? 'bg-green-100 text-green-700' 
+                                                  : 'bg-yellow-100 text-yellow-700'
+                                              }`}>
+                                                {ex.completed}/{ex.sets} sets
+                                              </span>
+                                            </div>
                                           </div>
                                         ))}
                                       </div>
