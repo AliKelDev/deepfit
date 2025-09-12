@@ -269,16 +269,20 @@ const AIChatAssistant = () => {
       (async () => {
         setIsLoading(true);
         
+        // Get current conversation state
+        const currentConversations = JSON.parse(localStorage.getItem(`profile_${JSON.parse(localStorage.getItem('userProfile')).id}_conversations`) || '{}');
+        const currentProfile = JSON.parse(localStorage.getItem('userProfile'));
+        
         try {
           const response = await fetch('/.netlify/functions/ai-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              messages: [...profileConversations[activeConversationId].messages, {
+              messages: [...(currentConversations[activeConversationId]?.messages || []), {
                 ...userMessage,
                 content: `${message}\n\n${workoutDetails}` // Send formatted details to AI
               }],
-              userProfile: activeProfile
+              userProfile: currentProfile
             })
           });
 
@@ -331,7 +335,7 @@ const AIChatAssistant = () => {
       setInitialMessage(location.state.message);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, activeConversationId, navigate, profileConversations, activeProfile]);
+  }, [location.state, activeConversationId, navigate]);
 
   // Handle progress data separately to fix the double-sending issue
   useEffect(() => {
