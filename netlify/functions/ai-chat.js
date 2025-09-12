@@ -138,12 +138,6 @@ ${profileContext}
       });
     }
 
-    // Create the user prompt
-    let userPrompt = messages && messages.length > 0 ? messages[messages.length - 1].content : "";
-    if (userPrompt) {
-      aiMessages.push({ role: 'user', content: userPrompt });
-    }
-
     // Gemini API Call with retry logic remains the same
     const geminiResponse = await retryRequest(async () => {
       const response = await fetch(
@@ -154,21 +148,18 @@ ${profileContext}
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  ...aiMessages.map((m) => ({
-                    text: m.content,
-                  })),
-                  ...(imageData ? [{
-                    inline_data: {
-                      mime_type: "image/jpeg",
-                      data: imageData.split(',')[1] // Remove data:image/jpeg;base64, prefix
-                    }
-                  }] : [])
-                ]
-              },
-            ],
+            contents: aiMessages.map((msg) => ({
+              role: msg.role === "ai" ? "model" : "user",
+              parts: [
+                { text: msg.content },
+                ...(msg.role === "user" && imageData ? [{
+                  inline_data: {
+                    mime_type: "image/jpeg",
+                    data: imageData.split(',')[1] // Remove data:image/jpeg;base64, prefix
+                  }
+                }] : [])
+              ]
+            })),
           }),
         }
       );
