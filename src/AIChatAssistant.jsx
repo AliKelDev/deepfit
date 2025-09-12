@@ -248,10 +248,7 @@ const AIChatAssistant = () => {
       const userMessage = {
         id: Date.now(),
         type: 'user',
-        content: JSON.stringify({
-          text: message,
-          workoutData: location.state.workout
-        }),
+        content: `${message}\n\n${workoutDetails}`,
         workoutShared: true
       };
       
