@@ -159,7 +159,7 @@ ${profileContext}
     // Gemini API Call with retry logic remains the same
     const geminiResponse = await retryRequest(async () => {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: {
