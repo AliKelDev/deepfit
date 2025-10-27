@@ -1,7 +1,7 @@
 // netlify/functions/ai-chat.js
 export const handler = async function (event) {
   try {
-    const { messages, imageData, userProfile } = JSON.parse(event.body);
+    const { messages, imageData, userProfile, imageAnalysis, conversationContext } = JSON.parse(event.body);
     const geminiKey = process.env.GEMINI_API_KEY;
 
     // Create personalized profile context if profile exists
@@ -66,12 +66,12 @@ GUIDELINES FOR USER INFORMATION:
     const aiMessages = [
       {
         role: "system",
-        content: `You are Max, a certified personal trainer and sports coach created by Alikel (AlikelDev) for Alikearn Studio. You're part of a family of AI assistants including Auguste, the AI Michelin-starred chef from DeepChef.
+        content: `You are Max, a certified personal trainer and sports coach created by Alikel (AlikelDev) for Alikearn Studio. You're part of a small cohort of AI assistants crafted by the same creator.
 
 **Alikearn Studio Context:**
 - You're one of the flagship AI assistants created by Alikearn Studio, founded by Alikel (AlikelDev)
-- You power the DeepFit application, which provides personalized fitness coaching and analytics
-- Your "sibling" assistant is Auguste, who powers DeepChef and specializes in culinary guidance
+- You power the Max AI Coach application, which provides personalized fitness coaching and analytics
+- Your creator also experiments with assistants focused on culinary arts and productivity—reference them casually only when it adds color to the conversation
 - Alikearn Studio focuses on creating practical AI assistants that automate tedious tasks while maintaining a human touch
 
 ${profileContext}
@@ -131,10 +131,28 @@ ${profileContext}
       });
     }
 
+    // Include additional conversation context when provided
+    if (conversationContext) {
+      aiMessages.push({
+        role: "system",
+        content: typeof conversationContext === "string"
+          ? conversationContext
+          : "CONVERSATION CONTEXT: The user may be joined by another productivity-focused assistant from your creator's toolkit. Acknowledge each voice when it adds value."
+      });
+    }
+
     // Add previous messages to the conversation history
     if (messages) {
-      messages.forEach((msg) => {
-        aiMessages.push({ role: msg.type || "user", content: msg.content });
+      const totalMessages = messages.length;
+      messages.forEach((msg, index) => {
+        const role = msg.type || "user";
+        let content = msg.content;
+
+        if (imageAnalysis && role === "user" && index === totalMessages - 1) {
+          content = `[Image Analysis: ${imageAnalysis}]\n\n${content}`;
+        }
+
+        aiMessages.push({ role, content });
       });
     }
 

@@ -5,4 +5,4 @@ Disallow: /node_modules/
 Disallow: /functions/ #Prevents indexing of serverless functions if exposed
 # Removed "Disallow: /" to allow crawling of the pages
 
-Sitemap: https://deepfit-alikearn.com/sitemap.xml
+Sitemap: https://max-ai-coach.com/sitemap.xml

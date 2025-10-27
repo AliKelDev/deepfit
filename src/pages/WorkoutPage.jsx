@@ -14,7 +14,6 @@ import CustomExerciseModal from '../components/workout/modals/CustomExerciseModa
 import QuickChatModal from '../components/workout/modals/QuickChatModal';
 
 // Import the exercise database
-import { EXERCISE_DATABASE } from '../data/exercises';
 
 const WorkoutPage = () => {
   const navigate = useNavigate();
@@ -40,6 +39,9 @@ const WorkoutPage = () => {
   const [workoutSelectOpen, setWorkoutSelectOpen] = useState(false);
   const [weightUnit, setWeightUnit] = useState('lbs');
   const [isAddingSet, setIsAddingSet] = useState(false);
+  const [exerciseDatabase, setExerciseDatabase] = useState({});
+  const [exerciseDataError, setExerciseDataError] = useState(null);
+  const [isExerciseDataLoading, setIsExerciseDataLoading] = useState(true);
 
   // New workout form state
   const [newWorkout, setNewWorkout] = useState({
@@ -89,6 +91,27 @@ const WorkoutPage = () => {
         }
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const loadExerciseDatabase = async () => {
+      try {
+        const response = await fetch('/exercises.json', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Failed to load exercises: ${response.status}`);
+        }
+        const data = await response.json();
+        setExerciseDatabase(data);
+        setExerciseDataError(null);
+      } catch (error) {
+        console.error('Failed to load exercise database:', error);
+        setExerciseDataError('Unable to load the exercise library. You can still create custom entries.');
+      } finally {
+        setIsExerciseDataLoading(false);
+      }
+    };
+
+    loadExerciseDatabase();
   }, []);
 
   // Save workouts when they change
@@ -646,8 +669,10 @@ const WorkoutPage = () => {
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
         handleAddExercise={activeWorkout ? handleAddExerciseToActiveWorkout : handleAddExercise}
-        EXERCISE_DATABASE={EXERCISE_DATABASE}
+        EXERCISE_DATABASE={exerciseDatabase}
         setShowCustomExerciseModal={setShowCustomExerciseModal}
+        isExerciseDataLoading={isExerciseDataLoading}
+        exerciseDataError={exerciseDataError}
       />
 
       <CustomExerciseModal 

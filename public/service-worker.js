@@ -29,7 +29,7 @@ const RUNTIME_CACHE = [
   '/src/components/progress/ProgressDataContent.jsx',
   '/src/components/workout/Header.jsx',
   '/src/components/workout/TabNavigation.jsx',
-  '/src/data/exercises.js'
+  '/exercises.json'
 ];
 
 // Network-first resources (always try network first, fallback to cache)

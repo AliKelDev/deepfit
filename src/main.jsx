@@ -103,8 +103,8 @@ const PageTitle = () => {
       <meta name="keywords" content={meta.keywords} />
       <meta property="og:title" content={meta.title} />
       <meta property="og:description" content={meta.description} />
-      <meta property="og:url" content={`https://deepfit-alikearn.com${location.pathname}`} />
-      <link rel="canonical" href={`https://deepfit-alikearn.com${location.pathname}`} />
+      <meta property="og:url" content={`https://max-ai-coach.com${location.pathname}`} />
+      <link rel="canonical" href={`https://max-ai-coach.com${location.pathname}`} />
       <script type="application/ld+json">{getStructuredData()}</script>
     </Helmet>
   );

@@ -1,1 +1,1 @@
-# DeepFit
+# Max AI Coach

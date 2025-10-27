@@ -237,6 +237,41 @@ const AIChatAssistant = () => {
   // Store the ID of the last processed data to prevent duplicate processing
   const lastProcessedDataIdRef = useRef(null);
 
+  const callAiChat = async (payload) => {
+    let response;
+    try {
+      response = await fetch('/.netlify/functions/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (networkError) {
+      networkError.isNetworkError = true;
+      throw networkError;
+    }
+
+    if (!response.ok) {
+      const error = new Error('Chat request failed');
+      error.status = response.status;
+      throw error;
+    }
+
+    return response.json();
+  };
+
+  const getChatErrorMessage = (error) => {
+    const message = (error?.message || '').toLowerCase();
+    if (error?.isNetworkError || message.includes('failed to fetch') || message.includes('network request failed')) {
+      return 'Connection failed. Please check your internet and try again.';
+    }
+
+    if (typeof error?.status === 'number' && error.status >= 500) {
+      return "There's an issue with the server right now. Please try again in a few minutes.";
+    }
+
+    return 'Something went wrong. Please try again shortly.';
+  };
+
   // Check for message from workout page or progress page
   useEffect(() => {
     // Handle workout data
@@ -271,21 +306,13 @@ const AIChatAssistant = () => {
         const currentProfile = JSON.parse(localStorage.getItem('userProfile'));
         
         try {
-          const response = await fetch('/.netlify/functions/ai-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [...(currentConversations[activeConversationId]?.messages || []), {
-                ...userMessage,
-                content: `${message}\n\n${workoutDetails}` // Send formatted details to AI
-              }],
-              userProfile: currentProfile
-            })
+          const data = await callAiChat({
+            messages: [...(currentConversations[activeConversationId]?.messages || []), {
+              ...userMessage,
+              content: `${message}\n\n${workoutDetails}`
+            }],
+            userProfile: currentProfile
           });
-
-          if (!response.ok) throw new Error('Chat request failed');
-
-          const data = await response.json();
           const aiResponse = data.content;
           
           // Update conversation with AI response
@@ -304,7 +331,8 @@ const AIChatAssistant = () => {
           
         } catch (error) {
           console.error('Error auto-sending workout message:', error);
-          
+          const friendlyMessage = getChatErrorMessage(error);
+
           // Add error message to conversation
           setProfileConversations(prev => ({
             ...prev,
@@ -313,7 +341,7 @@ const AIChatAssistant = () => {
               messages: [...prev[activeConversationId].messages, {
                 id: Date.now(),
                 type: 'ai',
-                content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+                content: friendlyMessage,
                 isError: true
               }],
               lastUpdated: Date.now()
@@ -391,18 +419,11 @@ const AIChatAssistant = () => {
         setIsLoading(true);
         
         try {
-          const response = await fetch('/.netlify/functions/ai-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [...profileConversations[activeConversationId].messages, userMessage],
-              userProfile: activeProfile
-            })
+          const conversationMessages = profileConversations[activeConversationId]?.messages || [];
+          const data = await callAiChat({
+            messages: [...conversationMessages, userMessage],
+            userProfile: activeProfile
           });
-
-          if (!response.ok) throw new Error('Chat request failed');
-
-          const data = await response.json();
           const aiResponse = data.content;
           
           // Update conversation with AI response
@@ -423,6 +444,7 @@ const AIChatAssistant = () => {
           
         } catch (error) {
           console.error('Error auto-sending message:', error);
+          const friendlyMessage = getChatErrorMessage(error);
           
           // Add error message to conversation
           setProfileConversations(prev => ({
@@ -432,14 +454,14 @@ const AIChatAssistant = () => {
               messages: [...prev[activeConversationId].messages, {
                 id: Date.now(),
                 type: 'ai',
-                content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+                content: friendlyMessage,
                 isError: true
               }],
               lastUpdated: Date.now()
             }
           }));
           
-          showToast("Couldn't connect to Max. Please try again later.", 3000);
+          showToast(friendlyMessage, 3000);
           
         } finally {
           setIsLoading(false);
@@ -658,36 +680,28 @@ const AIChatAssistant = () => {
       clearSelectedImage();
     }
 
-    // Retry logic for frontend
     const retryFetch = async (retries = 3, delay = 1000) => {
+      const baseMessages = profileConversations[activeConversationId]?.messages || [];
+      const payload = {
+        messages: [...baseMessages, userMessage],
+        imageData: selectedImage?.base64 || null,
+        userProfile: activeProfile
+      };
+
       for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-          const response = await fetch('/.netlify/functions/ai-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [...profileConversations[activeConversationId].messages, userMessage],
-              imageData: selectedImage?.base64 || null,
-              userProfile: activeProfile
-            })
-          });
-
-          if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
-          return response;
+          return await callAiChat(payload);
         } catch (error) {
           console.log(`Attempt ${attempt} failed:`, error.message);
           if (attempt === retries) throw error;
-          
-          // Wait before retrying with exponential backoff
+
           await new Promise(resolve => setTimeout(resolve, delay * attempt));
         }
       }
     };
 
     try {
-      const response = await retryFetch();
-
-      const data = await response.json();
+      const data = await retryFetch();
       const aiResponse = data.content;
       // Update conversation with AI response
       setProfileConversations(prev => ({
@@ -704,7 +718,8 @@ const AIChatAssistant = () => {
       }));
     } catch (error) {
       console.error('Error sending message:', error);
-      // Add error message to conversation
+      const friendlyMessage = getChatErrorMessage(error);
+
       setProfileConversations(prev => ({
         ...prev,
         [activeConversationId]: {
@@ -712,12 +727,14 @@ const AIChatAssistant = () => {
           messages: [...prev[activeConversationId].messages, {
             id: Date.now(),
             type: 'ai',
-            content: "⚠️ Whoa there! I'm having trouble connecting. Let's try again later!",
+            content: friendlyMessage,
             isError: true
           }],
           lastUpdated: Date.now()
         }
       }));
+
+      showToast(friendlyMessage, 3000);
     } finally {
       setIsLoading(false);
       setTimeout(() => {
