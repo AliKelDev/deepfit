@@ -1,12 +1,5 @@
 // netlify/functions/ai-chat.js
 
-const MAX_MESSAGE_HISTORY = 12;
-const ACTION_MARKERS = {
-  CREATE_WORKOUT: {
-    start: '[[CREATE_WORKOUT]]',
-    end: '[[/CREATE_WORKOUT]]',
-  },
-};
 
 export const handler = async function (event) {
   try {
@@ -201,7 +194,7 @@ When you have a complete workout plan ready, you MUST emit a structured data tok
 
     // Add previous messages to the conversation history
     if (messages) {
-      const recentMessages = messages.slice(-MAX_MESSAGE_HISTORY);
+      const recentMessages = Array.isArray(messages) ? messages : [];
       const totalMessages = recentMessages.length;
       recentMessages.forEach((msg, index) => {
         const role = msg.type || "user";
@@ -249,14 +242,10 @@ When you have a complete workout plan ready, you MUST emit a structured data tok
     const geminiData = await geminiResponse.json();
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    const { cleanedText, actions } = extractActions(rawText);
-    const trimmedText = cleanedText.trim();
-
     return {
       statusCode: 200,
       body: JSON.stringify({
-        content: trimmedText,
-        actions,
+        content: rawText || '',
       }),
     };
   } catch (error) {
@@ -293,63 +282,5 @@ async function retryRequest(fn, retries = 3, delay = 500) {
           return retryRequest(fn, retries - 1, delay * 2);
       }
       throw error;
-  }
-}
-
-function extractActions(text) {
-  if (!text) {
-    return { cleanedText: '', actions: [] };
-  }
-
-  const actions = [];
-  let cleanedText = text;
-
-  const { start, end } = ACTION_MARKERS.CREATE_WORKOUT;
-  const actionRegex = new RegExp(`${escapeRegex(start)}([\s\S]*?)${escapeRegex(end)}`, 'g');
-
-  cleanedText = cleanedText.replace(actionRegex, (match, group) => {
-    try {
-      const payload = parseJsonPayload(group);
-      actions.push({ type: 'create_workout', payload });
-    } catch (err) {
-      console.error('Failed to parse CREATE_WORKOUT payload:', err.message);
-    }
-    return '';
-  });
-
-  return { cleanedText, actions };
-}
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Normalizes payload blocks from the model before JSON parsing.
-function parseJsonPayload(block) {
-  if (typeof block !== 'string') {
-    throw new Error('Action payload is not text');
-  }
-
-  let candidate = block.trim();
-
-  if (candidate.startsWith('```')) {
-    candidate = candidate
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim();
-  }
-
-  try {
-    return JSON.parse(candidate);
-  } catch (initialError) {
-    const start = candidate.indexOf('{');
-    const end = candidate.lastIndexOf('}');
-
-    if (start !== -1 && end !== -1 && end > start) {
-      const sliced = candidate.slice(start, end + 1);
-      return JSON.parse(sliced);
-    }
-
-    throw initialError;
   }
 }

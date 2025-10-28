@@ -20,6 +20,66 @@ const thinkingMessages = [
   "Getting your fitness plan ready..."
 ];
 
+const ACTION_MARKERS = {
+  CREATE_WORKOUT: {
+    start: '[[CREATE_WORKOUT]]',
+    end: '[[/CREATE_WORKOUT]]'
+  }
+};
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const normalizeActionPayload = (block) => {
+  if (typeof block !== 'string') {
+    throw new Error('Action payload is not text');
+  }
+
+  let candidate = block.trim();
+
+  if (candidate.startsWith('```')) {
+    candidate = candidate
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+  }
+
+  try {
+    return JSON.parse(candidate);
+  } catch (firstError) {
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+
+    if (start !== -1 && end !== -1 && end > start) {
+      const sliced = candidate.slice(start, end + 1);
+      return JSON.parse(sliced);
+    }
+
+    throw firstError;
+  }
+};
+
+const extractActionsFromContent = (text) => {
+  if (typeof text !== 'string' || !text) {
+    return { cleanedText: '', actions: [] };
+  }
+
+  const { start, end } = ACTION_MARKERS.CREATE_WORKOUT;
+  const pattern = new RegExp(String.raw`${escapeRegex(start)}([\s\S]*?)${escapeRegex(end)}`, 'g');
+  const actions = [];
+
+  const cleanedText = text.replace(pattern, (_, block) => {
+    try {
+      const payload = normalizeActionPayload(block);
+      actions.push({ type: 'create_workout', payload });
+    } catch (error) {
+      console.error('Failed to parse workout payload:', error.message);
+    }
+    return '';
+  });
+
+  return { cleanedText, actions };
+};
+
 // Function to resize and compress image before storage
 const resizeImage = (file, maxWidth = 800, maxHeight = 600, quality = 0.7) => {
   return new Promise((resolve) => {
@@ -309,26 +369,31 @@ const AIChatAssistant = () => {
   const processAiResponse = (conversationId, data) => {
     if (!data) return;
 
-    const actions = Array.isArray(data.actions) ? data.actions : [];
-    const workoutAction = actions.find((action) => action?.type === 'create_workout' && action.payload);
+    const initialContent = typeof data.content === 'string' ? data.content : (data.message || '');
+    const { cleanedText, actions: extractedActions } = extractActionsFromContent(initialContent);
+    const payloadActions = Array.isArray(data.actions) && data.actions.length ? data.actions : extractedActions;
+    const workoutAction = payloadActions.find((action) => action?.type === 'create_workout' && action.payload);
 
-    //debugging
     console.log('--- Full response from backend ---', data);
     console.log('--- Found workout action ---', workoutAction);
-    // end of debugging, te remove later
 
+    const trimmedContent = cleanedText.trim();
 
     if (workoutAction) {
       openArtifact('workout_draft', workoutAction.payload);
-      appendAiMessage(
-        conversationId,
-        "I've drafted a workout for you—check the panel on the right to review it.",
-      );
+
+      if (trimmedContent) {
+        showToast('Workout drafted—check the panel to review it.', 2500);
+      } else {
+        appendAiMessage(
+          conversationId,
+          "I've drafted a workout for you—check the panel on the right to review it.",
+        );
+      }
     }
 
-    const aiContent = typeof data.content === 'string' ? data.content : (data.message || '');
-    if (aiContent.trim()) {
-      appendAiMessage(conversationId, aiContent.trim());
+    if (trimmedContent) {
+      appendAiMessage(conversationId, trimmedContent);
     }
   };
 
