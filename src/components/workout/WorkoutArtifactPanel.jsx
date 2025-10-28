@@ -10,6 +10,8 @@ const WorkoutArtifactPanel = () => {
   const { workouts } = useWorkout();
   const navigate = useNavigate();
 
+  console.log('[WorkoutArtifactPanel] state snapshot:', artifactState);
+
   if (!artifactState || artifactState.type !== 'workout_draft' || !artifactState.isOpen) {
     return null;
   }

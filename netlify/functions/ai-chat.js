@@ -309,7 +309,7 @@ function extractActions(text) {
 
   cleanedText = cleanedText.replace(actionRegex, (match, group) => {
     try {
-      const payload = JSON.parse(group.trim());
+      const payload = parseJsonPayload(group);
       actions.push({ type: 'create_workout', payload });
     } catch (err) {
       console.error('Failed to parse CREATE_WORKOUT payload:', err.message);
@@ -322,4 +322,34 @@ function extractActions(text) {
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Normalizes payload blocks from the model before JSON parsing.
+function parseJsonPayload(block) {
+  if (typeof block !== 'string') {
+    throw new Error('Action payload is not text');
+  }
+
+  let candidate = block.trim();
+
+  if (candidate.startsWith('```')) {
+    candidate = candidate
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+  }
+
+  try {
+    return JSON.parse(candidate);
+  } catch (initialError) {
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+
+    if (start !== -1 && end !== -1 && end > start) {
+      const sliced = candidate.slice(start, end + 1);
+      return JSON.parse(sliced);
+    }
+
+    throw initialError;
+  }
 }
