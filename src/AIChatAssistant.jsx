@@ -312,6 +312,12 @@ const AIChatAssistant = () => {
     const actions = Array.isArray(data.actions) ? data.actions : [];
     const workoutAction = actions.find((action) => action?.type === 'create_workout' && action.payload);
 
+    //debugging
+    console.log('--- Full response from backend ---', data);
+    console.log('--- Found workout action ---', workoutAction);
+    // end of debugging, te remove later
+
+
     if (workoutAction) {
       openArtifact('workout_draft', workoutAction.payload);
       appendAiMessage(
