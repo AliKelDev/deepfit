@@ -9,7 +9,9 @@ import NavigationMenu from './components/NavigationMenu';
 import WorkoutPage from './pages/WorkoutPage';
 import ProgressPage from './pages/ProgressPage';
 import { WorkoutProvider } from './WorkoutContext';
+import { ArtifactPanelProvider } from './context/ArtifactPanelContext';
 import MobileAppInstallBanner from './components/MobileAppInstallBanner';
+import WorkoutArtifactPanel from './components/workout/WorkoutArtifactPanel';
 
 // Meta tag component for SEO
 const PageTitle = () => {
@@ -178,7 +180,8 @@ const App = () => {
     <HelmetProvider>
       <BrowserRouter>
         <WorkoutProvider>
-          <div className="flex flex-col min-h-screen">
+          <ArtifactPanelProvider>
+            <div className="flex flex-col min-h-screen">
             <PageTitle />
             <NavigationMenu />
             <main className="flex-grow">
@@ -228,7 +231,9 @@ const App = () => {
                 </div>
               </div>
             </footer>
-          </div>
+            <WorkoutArtifactPanel />
+            </div>
+          </ArtifactPanelProvider>
         </WorkoutProvider>
       </BrowserRouter>
     </HelmetProvider>

@@ -8,6 +8,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import ProgressDataContent from './components/progress/ProgressDataContent';
+import { useArtifactPanel } from './context/ArtifactPanelContext';
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%234A90E2'/%3E%3Cpath d='M20 21C23.3137 21 26 18.3137 26 15C26 11.6863 23.3137 9 20 9C16.6863 9 14 11.6863 14 15C14 18.3137 16.6863 21 20 21ZM20 23C14.4772 23 10 27.4772 10 33H30C30 27.4772 25.5228 23 20 23Z' fill='white'/%3E%3C/svg%3E";
 
@@ -236,6 +237,7 @@ const AIChatAssistant = () => {
   
   // Store the ID of the last processed data to prevent duplicate processing
   const lastProcessedDataIdRef = useRef(null);
+  const { openArtifact, closeArtifact, resetArtifact } = useArtifactPanel();
 
   const callAiChat = async (payload) => {
     let response;
@@ -270,6 +272,58 @@ const AIChatAssistant = () => {
     }
 
     return 'Something went wrong. Please try again shortly.';
+  };
+
+  const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const appendAiMessage = (conversationId, content, extra = {}) => {
+    if (!conversationId) return;
+    const safeContent = typeof content === 'string' ? content : '';
+
+    if (!safeContent && !extra.isError) {
+      return;
+    }
+
+    setProfileConversations(prev => {
+      const targetConversation = prev[conversationId];
+      if (!targetConversation) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [conversationId]: {
+          ...targetConversation,
+          messages: [...targetConversation.messages, {
+            id: createMessageId(),
+            type: 'ai',
+            content: safeContent,
+            ...extra,
+          }],
+          lastUpdated: Date.now(),
+        }
+      };
+    });
+  };
+
+  const processAiResponse = (conversationId, data) => {
+    if (!data) return;
+
+    const actions = Array.isArray(data.actions) ? data.actions : [];
+    const workoutAction = actions.find((action) => action?.type === 'create_workout' && action.payload);
+
+    if (workoutAction) {
+      openArtifact('workout_draft', workoutAction.payload);
+      appendAiMessage(
+        conversationId,
+        "I've drafted a workout for you—check the panel on the right to review it.",
+      );
+    }
+
+    const aiContent = typeof data.content === 'string' ? data.content : (data.message || '');
+    if (aiContent.trim()) {
+      appendAiMessage(conversationId, aiContent.trim());
+    }
   };
 
   // Check for message from workout page or progress page
@@ -313,41 +367,13 @@ const AIChatAssistant = () => {
             }],
             userProfile: currentProfile
           });
-          const aiResponse = data.content;
-          
-          // Update conversation with AI response
-          setProfileConversations(prev => ({
-            ...prev,
-            [activeConversationId]: {
-              ...prev[activeConversationId],
-              messages: [...prev[activeConversationId].messages, {
-                id: Date.now() + 1,
-                type: 'ai',
-                content: aiResponse
-              }],
-              lastUpdated: Date.now()
-            }
-          }));
+
+          processAiResponse(activeConversationId, data);
           
         } catch (error) {
           console.error('Error auto-sending workout message:', error);
           const friendlyMessage = getChatErrorMessage(error);
-
-          // Add error message to conversation
-          setProfileConversations(prev => ({
-            ...prev,
-            [activeConversationId]: {
-              ...prev[activeConversationId],
-              messages: [...prev[activeConversationId].messages, {
-                id: Date.now(),
-                type: 'ai',
-                content: friendlyMessage,
-                isError: true
-              }],
-              lastUpdated: Date.now()
-            }
-          }));
-          
+          appendAiMessage(activeConversationId, friendlyMessage, { isError: true });
         } finally {
           setIsLoading(false);
         }
@@ -424,43 +450,14 @@ const AIChatAssistant = () => {
             messages: [...conversationMessages, userMessage],
             userProfile: activeProfile
           });
-          const aiResponse = data.content;
-          
-          // Update conversation with AI response
-          setProfileConversations(prev => ({
-            ...prev,
-            [activeConversationId]: {
-              ...prev[activeConversationId],
-              messages: [...prev[activeConversationId].messages, {
-                id: Date.now() + 1,
-                type: 'ai',
-                content: aiResponse
-              }],
-              lastUpdated: Date.now()
-            }
-          }));
-          
+
+          processAiResponse(activeConversationId, data);
           showToast("Max has analyzed your progress data", 2000);
           
         } catch (error) {
           console.error('Error auto-sending message:', error);
           const friendlyMessage = getChatErrorMessage(error);
-          
-          // Add error message to conversation
-          setProfileConversations(prev => ({
-            ...prev,
-            [activeConversationId]: {
-              ...prev[activeConversationId],
-              messages: [...prev[activeConversationId].messages, {
-                id: Date.now(),
-                type: 'ai',
-                content: friendlyMessage,
-                isError: true
-              }],
-              lastUpdated: Date.now()
-            }
-          }));
-          
+          appendAiMessage(activeConversationId, friendlyMessage, { isError: true });
           showToast(friendlyMessage, 3000);
           
         } finally {
@@ -602,6 +599,7 @@ const AIChatAssistant = () => {
     // Reset processing state when creating a new conversation
     setProcessingId(null);
     lastProcessedDataIdRef.current = null;
+    resetArtifact();
   };
 
   const handleImageSelect = async (e) => {
@@ -655,12 +653,14 @@ const AIChatAssistant = () => {
     lastRequestTime.current = now;
     setIsLoading(true);
 
+    const imagePayload = selectedImage?.base64 || null;
+
     // Create user message with base64 image if present
     const userMessage = {
       id: Date.now(),
       type: 'user',
       content: currentMessage,
-      imageUrl: selectedImage?.base64 || null, // Store base64 image for persistence
+      imageUrl: imagePayload, // Store base64 image for persistence
       pendingResponse: true
     };
 
@@ -684,7 +684,7 @@ const AIChatAssistant = () => {
       const baseMessages = profileConversations[activeConversationId]?.messages || [];
       const payload = {
         messages: [...baseMessages, userMessage],
-        imageData: selectedImage?.base64 || null,
+        imageData: imagePayload,
         userProfile: activeProfile
       };
 
@@ -702,38 +702,11 @@ const AIChatAssistant = () => {
 
     try {
       const data = await retryFetch();
-      const aiResponse = data.content;
-      // Update conversation with AI response
-      setProfileConversations(prev => ({
-        ...prev,
-        [activeConversationId]: {
-          ...prev[activeConversationId],
-          messages: [...prev[activeConversationId].messages, {
-            id: Date.now() + 1,
-            type: 'ai',
-            content: aiResponse
-          }],
-          lastUpdated: Date.now()
-        }
-      }));
+      processAiResponse(activeConversationId, data);
     } catch (error) {
       console.error('Error sending message:', error);
       const friendlyMessage = getChatErrorMessage(error);
-
-      setProfileConversations(prev => ({
-        ...prev,
-        [activeConversationId]: {
-          ...prev[activeConversationId],
-          messages: [...prev[activeConversationId].messages, {
-            id: Date.now(),
-            type: 'ai',
-            content: friendlyMessage,
-            isError: true
-          }],
-          lastUpdated: Date.now()
-        }
-      }));
-
+      appendAiMessage(activeConversationId, friendlyMessage, { isError: true });
       showToast(friendlyMessage, 3000);
     } finally {
       setIsLoading(false);
@@ -803,6 +776,8 @@ const AIChatAssistant = () => {
                           setIsSidebarOpen(false);
                           // Reset processing state when switching conversations
                           setProcessingId(null);
+                          closeArtifact();
+                          resetArtifact();
                         }}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">

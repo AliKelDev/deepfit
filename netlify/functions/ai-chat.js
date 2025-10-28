@@ -1,4 +1,13 @@
 // netlify/functions/ai-chat.js
+
+const MAX_MESSAGE_HISTORY = 12;
+const ACTION_MARKERS = {
+  CREATE_WORKOUT: {
+    start: '[[CREATE_WORKOUT]]',
+    end: '[[/CREATE_WORKOUT]]',
+  },
+};
+
 export const handler = async function (event) {
   try {
     const { messages, imageData, userProfile, imageAnalysis, conversationContext } = JSON.parse(event.body);
@@ -121,6 +130,23 @@ ${profileContext}
 - Don't be afraid to challenge users when appropriate - true coaches sometimes need to push their clients
 - Remember you're part of the Alikearn Studio family of AI assistants`,
       },
+      {
+        role: "system",
+        content: `**Action Tokens**
+When you are confident that a full workout plan is ready, emit an action token using this exact structure:
+
+[[CREATE_WORKOUT]]
+{ "name": "Workout name", "description": "Short summary", "exercises": [ { "name": "Exercise", "sets": [ { "reps": 10, "weight": 15, "type": "normal" } ] } ] }
+[[/CREATE_WORKOUT]]
+
+Guidelines:
+- The JSON body must be valid and include the fields shown above.
+- weight should be a number (use 0 for bodyweight work).
+- type must be one of: "normal", "warm-up", or "drop".
+- You can include friendly conversation around the token, but the token must remain on its own lines.
+- Only emit this token when you actually intend to provide a structured workout plan.
+- If the user asks for revisions, emit a fresh token with the updated plan.`,
+      },
     ];
 
     // Add a subtle reminder of the user context as the first message in every conversation
@@ -143,8 +169,9 @@ ${profileContext}
 
     // Add previous messages to the conversation history
     if (messages) {
-      const totalMessages = messages.length;
-      messages.forEach((msg, index) => {
+      const recentMessages = messages.slice(-MAX_MESSAGE_HISTORY);
+      const totalMessages = recentMessages.length;
+      recentMessages.forEach((msg, index) => {
         const role = msg.type || "user";
         let content = msg.content;
 
@@ -188,12 +215,16 @@ ${profileContext}
     });
 
     const geminiData = await geminiResponse.json();
-    const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "No response content found";
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    const { cleanedText, actions } = extractActions(rawText);
+    const trimmedText = cleanedText.trim();
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        content: responseText,
+        content: trimmedText,
+        actions,
       }),
     };
   } catch (error) {
@@ -231,4 +262,32 @@ async function retryRequest(fn, retries = 3, delay = 500) {
       }
       throw error;
   }
+}
+
+function extractActions(text) {
+  if (!text) {
+    return { cleanedText: '', actions: [] };
+  }
+
+  const actions = [];
+  let cleanedText = text;
+
+  const { start, end } = ACTION_MARKERS.CREATE_WORKOUT;
+  const actionRegex = new RegExp(`${escapeRegex(start)}([\s\S]*?)${escapeRegex(end)}`, 'g');
+
+  cleanedText = cleanedText.replace(actionRegex, (match, group) => {
+    try {
+      const payload = JSON.parse(group.trim());
+      actions.push({ type: 'create_workout', payload });
+    } catch (err) {
+      console.error('Failed to parse CREATE_WORKOUT payload:', err.message);
+    }
+    return '';
+  });
+
+  return { cleanedText, actions };
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
