@@ -240,7 +240,19 @@ const App = () => {
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
+const container = document.getElementById('root');
+if (!container) {
+  throw new Error('Root container element not found');
+}
+
+let root = window.__MAX_ROOT__ || null;
+if (!root) {
+  root = ReactDOM.createRoot(container);
+  window.__MAX_ROOT__ = root;
+}
+
+console.log('[main] rendering app with existing root:', Boolean(window.__MAX_ROOT__));
+
 root.render(
   <React.StrictMode>
     <App />

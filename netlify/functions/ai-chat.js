@@ -1,5 +1,5 @@
 // netlify/functions/ai-chat.js
-
+//@ts-ignore
 
 export const handler = async function (event) {
   try {
@@ -130,11 +130,12 @@ ${profileContext}
   {
     role: "system",
     content: `**Action Tokens for Structured Data**
-When you have a complete workout plan ready, you MUST emit a structured data token. This is for the application and must follow a strict format.
+You manage workouts through explicit tokens. Use them whenever you create, revise, or remove a plan.
 
-**Structure:**
+**Create a Workout**
 [[CREATE_WORKOUT]]
 {
+  "id": "workout-unique-id",
   "name": "Workout Name",
   "description": "A brief summary of the workout's focus.",
   "exercises": [
@@ -150,15 +151,33 @@ When you have a complete workout plan ready, you MUST emit a structured data tok
 }
 [[/CREATE_WORKOUT]]
 
+**Update an Existing Workout**
+[[UPDATE_WORKOUT]]
+{
+  "id": "workout-unique-id",
+  "name": "Updated name (optional)",
+  "description": "Updated description (optional)",
+  "exercises": [
+    { "name": "...", "sets": [...] }
+  ]
+}
+[[/UPDATE_WORKOUT]]
+
+**Delete a Workout**
+[[DELETE_WORKOUT]]
+{ "id": "workout-unique-id" }
+[[/DELETE_WORKOUT]]
+
 **CRITICAL GUIDELINES:**
-1.  **JSON MUST BE VALID:** The content between the markers must be a single, perfectly formed JSON object.
-2.  **\`exercises\` Array Content:** This array must ONLY contain objects representing actual, performable exercises (e.g., "Push-ups", "Deadlift").
-3.  **DO NOT INCLUDE HEADERS:** Do NOT put organizational text, sections, blocks (like "Block A", "Main Workout", "Circuit 1"), or any non-exercise strings into the 'name' field of an object in the \`exercises\` array. These are for the conversational text only, not the structured data.
-4.  **Data Types are Strict:**
-    - \`weight\` must be a number. Use 0 for bodyweight.
-    - \`type\` must be one of: "normal", "warm-up", or "drop".
-5.  The token must be on its own lines, separate from your friendly conversational text.
-6.  If the user asks for revisions, emit a completely new, updated token.
+1. **JSON MUST BE VALID:** Everything inside the markers is a single, perfectly formed JSON object.
+2. **Always include an \`id\`:** The same \`id\` must be reused for updates and deletes so the app can target the correct plan. Generate one if it isn't provided by the user.
+3. **\`exercises\` Array Content:** Only list true exercises—no headers or section titles. Put those in conversational text instead.
+4. **Data Types are Strict:**
+   - \`weight\` must be a number; use 0 for bodyweight.
+   - \`type\` must be one of: "normal", "warm-up", or "drop".
+5. Tokens must sit on their own lines, away from conversational prose. Print the conversational explanation first, then put the token block, then resume normal chat if needed.
+6. When the user requests revisions, emit an \`UPDATE_WORKOUT\` token with the adjusted data. To remove a plan, emit \`DELETE_WORKOUT\` with its \`id\`.
+7. **Never promise to emit a token later.** If you describe a workout, you must include the matching token in the same message. If you forgot one, immediately send a follow-up message *containing only the required token block*.
 
 **Example of what NOT to do:**
 "exercises": [

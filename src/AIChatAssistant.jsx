@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2, X, Send, ImagePlus, XCircle, Plus, Menu,
@@ -23,8 +23,27 @@ const thinkingMessages = [
 const ACTION_MARKERS = {
   CREATE_WORKOUT: {
     start: '[[CREATE_WORKOUT]]',
-    end: '[[/CREATE_WORKOUT]]'
+    end: '[[/CREATE_WORKOUT]]',
+    type: 'create_workout'
+  },
+  UPDATE_WORKOUT: {
+    start: '[[UPDATE_WORKOUT]]',
+    end: '[[/UPDATE_WORKOUT]]',
+    type: 'update_workout'
+  },
+  DELETE_WORKOUT: {
+    start: '[[DELETE_WORKOUT]]',
+    end: '[[/DELETE_WORKOUT]]',
+    type: 'delete_workout'
   }
+};
+
+const ACTION_TOKEN_PATTERN = /\[\[(CREATE_WORKOUT|UPDATE_WORKOUT|DELETE_WORKOUT)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
+
+const ACTION_TYPE_MAP = {
+  CREATE_WORKOUT: 'create_workout',
+  UPDATE_WORKOUT: 'update_workout',
+  DELETE_WORKOUT: 'delete_workout',
 };
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -63,21 +82,97 @@ const extractActionsFromContent = (text) => {
     return { cleanedText: '', actions: [] };
   }
 
-  const { start, end } = ACTION_MARKERS.CREATE_WORKOUT;
-  const pattern = new RegExp(String.raw`${escapeRegex(start)}([\s\S]*?)${escapeRegex(end)}`, 'g');
   const actions = [];
 
-  const cleanedText = text.replace(pattern, (_, block) => {
+  const cleanedText = text.replace(ACTION_TOKEN_PATTERN, (_, tokenType, block) => {
+    const actionType = ACTION_TYPE_MAP[tokenType];
+    if (!actionType) {
+      return '';
+    }
+
     try {
       const payload = normalizeActionPayload(block);
-      actions.push({ type: 'create_workout', payload });
+      actions.push({ type: actionType, payload });
     } catch (error) {
-      console.error('Failed to parse workout payload:', error.message);
+      console.error(`Failed to parse ${actionType} payload:`, error.message);
     }
     return '';
   });
 
   return { cleanedText, actions };
+};
+
+const generateId = (prefix = 'item') => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeWorkoutArtifact = (artifact) => {
+  if (!artifact || typeof artifact !== 'object') {
+    return null;
+  }
+
+  const safePayload = artifact.payload && typeof artifact.payload === 'object'
+    ? { ...artifact.payload }
+    : {};
+
+  const artifactId = artifact.id || safePayload.id || generateId('workout');
+  if (!safePayload.id) {
+    safePayload.id = artifactId;
+  }
+
+  return {
+    id: artifactId,
+    name: safePayload.name || artifact.name || 'Untitled workout',
+    payload: safePayload,
+    status: artifact.status || 'draft',
+    source: artifact.source || 'assistant',
+    createdAt: artifact.createdAt || Date.now(),
+    updatedAt: artifact.updatedAt || artifact.createdAt || Date.now(),
+    version: artifact.version || 1,
+    history: Array.isArray(artifact.history) ? artifact.history : [],
+    isFavorite: Boolean(artifact.isFavorite),
+  };
+};
+
+const createWorkoutArtifact = (payload, options = {}) => {
+  const basePayload = typeof payload === 'object' && payload !== null ? { ...payload } : {};
+  const artifactId = options.id || basePayload.id || generateId('workout');
+
+  if (!basePayload.id) {
+    basePayload.id = artifactId;
+  }
+
+  const timestamp = Date.now();
+
+  return {
+    id: artifactId,
+    name: basePayload.name || options.name || 'Untitled workout',
+    payload: basePayload,
+    status: options.status || 'draft',
+    source: options.source || 'assistant',
+    createdAt: options.createdAt || timestamp,
+    updatedAt: timestamp,
+    version: options.version || 1,
+    history: Array.isArray(options.history) ? options.history : [],
+    isFavorite: Boolean(options.isFavorite),
+  };
+};
+
+const normalizeConversationRecord = (conversation) => {
+  if (!conversation || typeof conversation !== 'object') {
+    return null;
+  }
+
+  const normalizedArtifacts = Array.isArray(conversation.workoutArtifacts)
+    ? conversation.workoutArtifacts
+        .map(normalizeWorkoutArtifact)
+        .filter(Boolean)
+    : [];
+
+  return {
+    ...conversation,
+    messages: Array.isArray(conversation.messages) ? conversation.messages : [],
+    workoutArtifacts: normalizedArtifacts,
+    activeArtifactId: conversation.activeArtifactId || null,
+  };
 };
 
 // Function to resize and compress image before storage
@@ -297,7 +392,46 @@ const AIChatAssistant = () => {
   
   // Store the ID of the last processed data to prevent duplicate processing
   const lastProcessedDataIdRef = useRef(null);
-  const { openArtifact, closeArtifact, resetArtifact } = useArtifactPanel();
+  const {
+    conversationArtifacts,
+    panelState,
+    upsertArtifact,
+    removeArtifact,
+    openArtifactPanel,
+    updatePanelPayload,
+    closeArtifactPanel,
+    clearConversationArtifacts,
+    getConversationEntry,
+  } = useArtifactPanel();
+
+  const showToast = useCallback((message, duration = 3000) => {
+    setNotificationMessage(message);
+    setShowNotification(true);
+
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+
+    notificationTimeoutRef.current = setTimeout(() => {
+      setShowNotification(false);
+    }, duration);
+  }, []);
+
+  const openConversationArtifactPanel = useCallback((conversationId) => {
+    if (!conversationId) {
+      return;
+    }
+
+    if (panelState.isOpen && panelState.conversationId === conversationId) {
+      updatePanelPayload(conversationId, {
+        extras: { notify: showToast },
+        isOpen: true,
+        force: true,
+      });
+    } else {
+      openArtifactPanel(conversationId, { notify: showToast });
+    }
+  }, [openArtifactPanel, panelState.conversationId, panelState.isOpen, showToast, updatePanelPayload]);
 
   const callAiChat = async (payload) => {
     let response;
@@ -336,6 +470,55 @@ const AIChatAssistant = () => {
 
   const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+  const updateConversationRecord = useCallback((conversationId, updater) => {
+    if (!conversationId || typeof updater !== 'function') {
+      return null;
+    }
+
+    let updatedConversation = null;
+
+    setProfileConversations(prev => {
+      const existingRaw = prev[conversationId];
+      const existingNormalized = normalizeConversationRecord(existingRaw);
+
+      const baseConversation = existingNormalized || normalizeConversationRecord({
+        id: conversationId,
+        title: existingRaw?.title || 'Conversation',
+        messages: Array.isArray(existingRaw?.messages) ? existingRaw.messages : [],
+        createdAt: existingRaw?.createdAt || Date.now(),
+        lastUpdated: existingRaw?.lastUpdated || Date.now(),
+        workoutArtifacts: Array.isArray(existingRaw?.workoutArtifacts) ? existingRaw.workoutArtifacts : [],
+        activeArtifactId: existingRaw?.activeArtifactId || null,
+      });
+
+      if (!baseConversation) {
+        console.warn('[updateConversationRecord] unable to bootstrap conversation state for', conversationId, 'keys:', Object.keys(prev));
+        return prev;
+      }
+
+      const candidate = updater(baseConversation);
+      if (!candidate) {
+        console.warn('[updateConversationRecord] updater returned falsy value for', conversationId);
+        return prev;
+      }
+
+      const nextConversation = normalizeConversationRecord(candidate) || null;
+      if (!nextConversation) {
+        console.warn('[updateConversationRecord] updater returned invalid conversation for', conversationId);
+        return prev;
+      }
+
+      updatedConversation = nextConversation;
+      console.log('[updateConversationRecord] stored conversation', conversationId, nextConversation);
+      return {
+        ...prev,
+        [conversationId]: nextConversation
+      };
+    });
+
+    return updatedConversation;
+  }, []);
+
   const appendAiMessage = (conversationId, content, extra = {}) => {
     if (!conversationId) return;
     const safeContent = typeof content === 'string' ? content : '';
@@ -344,26 +527,16 @@ const AIChatAssistant = () => {
       return;
     }
 
-    setProfileConversations(prev => {
-      const targetConversation = prev[conversationId];
-      if (!targetConversation) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [conversationId]: {
-          ...targetConversation,
-          messages: [...targetConversation.messages, {
-            id: createMessageId(),
-            type: 'ai',
-            content: safeContent,
-            ...extra,
-          }],
-          lastUpdated: Date.now(),
-        }
-      };
-    });
+    updateConversationRecord(conversationId, (conversation) => ({
+      ...conversation,
+      messages: [...conversation.messages, {
+        id: createMessageId(),
+        type: 'ai',
+        content: safeContent,
+        ...extra,
+      }],
+      lastUpdated: Date.now(),
+    }));
   };
 
   const processAiResponse = (conversationId, data) => {
@@ -372,28 +545,100 @@ const AIChatAssistant = () => {
     const initialContent = typeof data.content === 'string' ? data.content : (data.message || '');
     const { cleanedText, actions: extractedActions } = extractActionsFromContent(initialContent);
     const payloadActions = Array.isArray(data.actions) && data.actions.length ? data.actions : extractedActions;
-    const workoutAction = payloadActions.find((action) => action?.type === 'create_workout' && action.payload);
-
-    console.log('--- Full response from backend ---', data);
-    console.log('--- Found workout action ---', workoutAction);
-
     const trimmedContent = cleanedText.trim();
 
-    if (workoutAction) {
-      openArtifact('workout_draft', workoutAction.payload);
+    console.log('--- Full response from backend ---', data);
+    console.log('--- Extracted payload actions ---', payloadActions);
 
-      if (trimmedContent) {
-        showToast('Workout drafted—check the panel to review it.', 2500);
-      } else {
-        appendAiMessage(
-          conversationId,
-          "I've drafted a workout for you—check the panel on the right to review it.",
-        );
+    const createdArtifacts = [];
+    const updatedArtifacts = [];
+    const deletedArtifactIds = [];
+    let entryAfterActions = null;
+
+    payloadActions.forEach((action) => {
+      if (!action || !action.type) {
+        return;
+      }
+
+      if (action.type === 'create_workout' && action.payload) {
+        const result = upsertArtifact(conversationId, {
+          id: action.payload.id,
+          name: action.payload.name,
+          description: action.payload.description,
+          payload: action.payload,
+          status: 'draft',
+          source: 'assistant',
+        });
+        if (result?.artifact) {
+          createdArtifacts.push(result.artifact);
+          entryAfterActions = result.entry;
+        }
+        return;
+      }
+
+      if (action.type === 'update_workout' && action.payload) {
+        const result = upsertArtifact(conversationId, {
+          id: action.payload.id,
+          name: action.payload.name,
+          description: action.payload.description,
+          payload: action.payload,
+          source: 'assistant',
+        });
+        if (result?.artifact) {
+          updatedArtifacts.push(result.artifact);
+          entryAfterActions = result.entry;
+        }
+        return;
+      }
+
+      if (action.type === 'delete_workout') {
+        const targetId = action.payload?.id || action.id;
+        if (!targetId) {
+          console.warn('delete_workout action missing id payload');
+          return;
+        }
+        const result = removeArtifact(conversationId, targetId);
+        if (result?.artifact) {
+          deletedArtifactIds.push(targetId);
+          entryAfterActions = result.entry;
+        }
+      }
+    });
+
+    if (!entryAfterActions) {
+      entryAfterActions = getConversationEntry(conversationId, conversationArtifacts);
+    }
+
+    if (createdArtifacts.length || updatedArtifacts.length) {
+      openConversationArtifactPanel(conversationId);
+    } else if (deletedArtifactIds.length && (!entryAfterActions || entryAfterActions.artifacts.length === 0)) {
+      closeArtifactPanel();
+    }
+
+    if (createdArtifacts.length || updatedArtifacts.length || deletedArtifactIds.length) {
+      let toastMessage = '';
+      if (createdArtifacts.length && updatedArtifacts.length) {
+        toastMessage = 'Workout drafted and updated—panel refreshed.';
+      } else if (createdArtifacts.length) {
+        toastMessage = 'Workout drafted—check the panel to review it.';
+      } else if (updatedArtifacts.length) {
+        toastMessage = 'Workout updated—panel refreshed.';
+      } else if (deletedArtifactIds.length) {
+        toastMessage = 'Workout removed from this conversation.';
+      }
+
+      if (toastMessage) {
+        showToast(toastMessage, 2500);
       }
     }
 
     if (trimmedContent) {
       appendAiMessage(conversationId, trimmedContent);
+    } else if (createdArtifacts.length || updatedArtifacts.length) {
+      appendAiMessage(
+        conversationId,
+        "I've updated your workout workspace—check the panel when you're ready.",
+      );
     }
   };
 
@@ -413,13 +658,10 @@ const AIChatAssistant = () => {
       };
       
       // Add user message to conversation
-      setProfileConversations(prev => ({
-        ...prev,
-        [activeConversationId]: {
-          ...prev[activeConversationId],
-          messages: [...prev[activeConversationId].messages, userMessage],
-          lastUpdated: Date.now()
-        }
+      updateConversationRecord(activeConversationId, (conversation) => ({
+        ...conversation,
+        messages: [...conversation.messages, userMessage],
+        lastUpdated: Date.now(),
       }));
       
       // Auto-send the message to get AI response
@@ -499,13 +741,10 @@ const AIChatAssistant = () => {
       };
       
       // Add user message to conversation
-      setProfileConversations(prev => ({
-        ...prev,
-        [activeConversationId]: {
-          ...prev[activeConversationId],
-          messages: [...prev[activeConversationId].messages, userMessage],
-          lastUpdated: Date.now()
-        }
+      updateConversationRecord(activeConversationId, (conversation) => ({
+        ...conversation,
+        messages: [...conversation.messages, userMessage],
+        lastUpdated: Date.now(),
       }));
       
       // Show a toast notification that progress is being shared
@@ -558,21 +797,6 @@ const AIChatAssistant = () => {
   };
 
   // Show notification/toast function
-  const showToast = (message, duration = 3000) => {
-    setNotificationMessage(message);
-    setShowNotification(true);
-    
-    // Clear any existing timeout
-    if (notificationTimeoutRef.current) {
-      clearTimeout(notificationTimeoutRef.current);
-    }
-    
-    // Set timeout to hide notification
-    notificationTimeoutRef.current = setTimeout(() => {
-      setShowNotification(false);
-    }, duration);
-  };
-
   // Load profile and check if first time
   useEffect(() => {
     const userProfile = localStorage.getItem('userProfile');
@@ -593,7 +817,14 @@ const AIChatAssistant = () => {
       const profileChats = localStorage.getItem(`profile_${profile.id}_conversations`);
       if (profileChats) {
         const chats = JSON.parse(profileChats);
-        setProfileConversations(chats);
+        const normalizedEntries = Object.entries(chats)
+          .map(([id, conversation]) => {
+            const normalized = normalizeConversationRecord(conversation);
+            return normalized ? [id, normalized] : null;
+          })
+          .filter(Boolean);
+
+        setProfileConversations(Object.fromEntries(normalizedEntries));
 
         // Set active conversation
         const lastActiveId = localStorage.getItem(`profile_${profile.id}_activeConversation`);
@@ -645,7 +876,7 @@ const AIChatAssistant = () => {
   };
 
   const createNewConversation = () => {
-    const newId = `conv-${Date.now()}`;
+    const newId = generateId('conv');
     const welcomeMessage = `**Hey ${activeProfile?.name}!** Ready to crush your fitness goals? What can I help you with today?`;
 
     const newConversation = {
@@ -657,12 +888,14 @@ const AIChatAssistant = () => {
         content: welcomeMessage
       }],
       createdAt: Date.now(),
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
+      workoutArtifacts: [],
+      activeArtifactId: null,
     };
 
     setProfileConversations(prev => ({
       ...prev,
-      [newId]: newConversation
+      [newId]: normalizeConversationRecord(newConversation)
     }));
     setActiveConversationId(newId);
     setIsSidebarOpen(false);
@@ -670,7 +903,7 @@ const AIChatAssistant = () => {
     // Reset processing state when creating a new conversation
     setProcessingId(null);
     lastProcessedDataIdRef.current = null;
-    resetArtifact();
+    closeArtifactPanel();
   };
 
   const handleImageSelect = async (e) => {
@@ -736,13 +969,10 @@ const AIChatAssistant = () => {
     };
 
     // Update conversation with user message
-    setProfileConversations(prev => ({
-      ...prev,
-      [activeConversationId]: {
-        ...prev[activeConversationId],
-        messages: [...prev[activeConversationId].messages, userMessage],
-        lastUpdated: Date.now()
-      }
+    updateConversationRecord(activeConversationId, (conversation) => ({
+      ...conversation,
+      messages: [...conversation.messages, userMessage],
+      lastUpdated: Date.now(),
     }));
 
     setCurrentMessage('');
@@ -847,8 +1077,7 @@ const AIChatAssistant = () => {
                           setIsSidebarOpen(false);
                           // Reset processing state when switching conversations
                           setProcessingId(null);
-                          closeArtifact();
-                          resetArtifact();
+                          closeArtifactPanel();
                         }}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1308,7 +1537,11 @@ const AIChatAssistant = () => {
                           }
 
                           return newConversations;
-                        });
+                      });
+                        if (panelState.conversationId === conversationToDelete) {
+                          closeArtifactPanel();
+                        }
+                        clearConversationArtifacts(conversationToDelete);
                         setShowDeleteModal(false);
                         setConversationToDelete(null);
                       }}
