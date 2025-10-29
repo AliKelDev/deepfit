@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2, X, Send, ImagePlus, XCircle, Plus, Menu,
   Trash2, MessageSquare, UserCircle, Dumbbell, ArrowRight, Camera,
-  Clock, ChevronRight, AlertCircle, Activity
+  Clock, ChevronRight, AlertCircle, Activity, PanelRightOpen
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -401,6 +401,7 @@ const AIChatAssistant = () => {
     updatePanelPayload,
     closeArtifactPanel,
     clearConversationArtifacts,
+    seedConversationArtifacts,
     getConversationEntry,
   } = useArtifactPanel();
 
@@ -415,23 +416,92 @@ const AIChatAssistant = () => {
     notificationTimeoutRef.current = setTimeout(() => {
       setShowNotification(false);
     }, duration);
-  }, []);
+  }, [seedConversationArtifacts]);
 
-  const openConversationArtifactPanel = useCallback((conversationId) => {
-    if (!conversationId) {
+  const findConversationWithArtifacts = useCallback((excludeId = null) => {
+    const entries = Object.values(conversationArtifacts)
+      .filter((entry) => entry?.artifacts?.length)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    if (!entries.length) {
+      return null;
+    }
+
+    if (excludeId) {
+      const exact = entries.find((entry) => entry.conversationId === excludeId);
+      if (exact) {
+        return exact.conversationId;
+      }
+    }
+
+    return entries[0].conversationId;
+  }, [conversationArtifacts]);
+
+  const getConversationTitle = useCallback((conversationId) => {
+    const title = profileConversations[conversationId]?.title;
+    if (title) return title;
+    const entry = conversationArtifacts[conversationId];
+    if (entry?.artifacts?.length) {
+      const latest = entry.artifacts[entry.artifacts.length - 1];
+      if (latest?.name) {
+        return `Draft: ${latest.name}`;
+      }
+    }
+    return `Conversation ${conversationId?.slice(-6)}`;
+  }, [conversationArtifacts, profileConversations]);
+
+  const openConversationArtifactPanel = useCallback((conversationId, options = {}) => {
+    if (!conversationId && !Object.keys(conversationArtifacts).length) {
       return;
     }
 
-    if (panelState.isOpen && panelState.conversationId === conversationId) {
-      updatePanelPayload(conversationId, {
-        extras: { notify: showToast },
+    const requestedId = conversationId || activeConversationId;
+    const requestedEntry = requestedId ? getConversationEntry(requestedId, conversationArtifacts) : null;
+    const hasRequestedArtifacts = !!requestedEntry?.artifacts?.length;
+
+    let targetConversationId = requestedId;
+    let fallbackUsed = false;
+
+    if (!hasRequestedArtifacts) {
+      const fallbackId = findConversationWithArtifacts(requestedId);
+      if (fallbackId) {
+        targetConversationId = fallbackId;
+        fallbackUsed = true;
+      }
+    }
+
+    if (!targetConversationId) {
+      return;
+    }
+
+    const extras = {
+      notify: showToast,
+      conversationTitle: getConversationTitle(targetConversationId),
+      fallbackUsed,
+      ...options.extras,
+    };
+
+    if (panelState.isOpen && panelState.conversationId === targetConversationId) {
+      updatePanelPayload(targetConversationId, {
+        extras,
         isOpen: true,
         force: true,
       });
     } else {
-      openArtifactPanel(conversationId, { notify: showToast });
+      openArtifactPanel(targetConversationId, extras);
     }
-  }, [openArtifactPanel, panelState.conversationId, panelState.isOpen, showToast, updatePanelPayload]);
+  }, [
+    activeConversationId,
+    conversationArtifacts,
+    findConversationWithArtifacts,
+    getConversationEntry,
+    getConversationTitle,
+    openArtifactPanel,
+    panelState.conversationId,
+    panelState.isOpen,
+    showToast,
+    updatePanelPayload,
+  ]);
 
   const callAiChat = async (payload) => {
     let response;
@@ -607,6 +677,28 @@ const AIChatAssistant = () => {
 
     if (!entryAfterActions) {
       entryAfterActions = getConversationEntry(conversationId, conversationArtifacts);
+    }
+
+    if (entryAfterActions) {
+      const serializedArtifacts = entryAfterActions.artifacts.map((artifact) => ({
+        id: artifact.id,
+        name: artifact.name,
+        description: artifact.description,
+        payload: artifact.payload,
+        status: artifact.status,
+        source: artifact.source,
+        createdAt: artifact.createdAt,
+        updatedAt: artifact.updatedAt,
+        version: artifact.version,
+        isFavorite: artifact.isFavorite,
+        linkedWorkoutId: artifact.linkedWorkoutId,
+        savedAt: artifact.savedAt,
+      }));
+
+      updateConversationRecord(conversationId, (conversation) => ({
+        ...conversation,
+        workoutArtifacts: serializedArtifacts,
+      }));
     }
 
     if (createdArtifacts.length || updatedArtifacts.length) {
@@ -796,6 +888,59 @@ const AIChatAssistant = () => {
     navigate('/profile');
   };
 
+  const handleToggleWorkoutPanel = () => {
+    if (panelState.isOpen) {
+      closeArtifactPanel();
+    } else {
+      openConversationArtifactPanel(activeConversationId);
+    }
+  };
+
+  const activeConversationArtifacts = activeConversationId
+    ? conversationArtifacts[activeConversationId]
+    : null;
+  const totalArtifactsCount = Object.values(conversationArtifacts)
+    .reduce((acc, entry) => acc + (entry?.artifacts?.length || 0), 0);
+  const isPanelOpenForActive = panelState.isOpen && panelState.conversationId === activeConversationId;
+
+  useEffect(() => {
+    Object.values(conversationArtifacts).forEach((entry) => {
+      if (!entry?.conversationId) {
+        return;
+      }
+
+      const serialized = (Array.isArray(entry.artifacts) ? entry.artifacts : []).map((artifact) => ({
+        id: artifact.id,
+        name: artifact.name,
+        description: artifact.description,
+        payload: artifact.payload,
+        status: artifact.status,
+        source: artifact.source,
+        createdAt: artifact.createdAt,
+        updatedAt: artifact.updatedAt,
+        version: artifact.version,
+        isFavorite: artifact.isFavorite,
+        linkedWorkoutId: artifact.linkedWorkoutId,
+        savedAt: artifact.savedAt,
+      }));
+
+      updateConversationRecord(entry.conversationId, (conversation) => {
+        const currentSerialized = Array.isArray(conversation.workoutArtifacts)
+          ? conversation.workoutArtifacts
+          : [];
+
+        if (JSON.stringify(currentSerialized) === JSON.stringify(serialized)) {
+          return conversation;
+        }
+
+        return {
+          ...conversation,
+          workoutArtifacts: serialized,
+        };
+      });
+    });
+  }, [conversationArtifacts, updateConversationRecord]);
+
   // Show notification/toast function
   // Load profile and check if first time
   useEffect(() => {
@@ -824,7 +969,14 @@ const AIChatAssistant = () => {
           })
           .filter(Boolean);
 
-        setProfileConversations(Object.fromEntries(normalizedEntries));
+        const normalizedMap = Object.fromEntries(normalizedEntries);
+        setProfileConversations(normalizedMap);
+
+        normalizedEntries.forEach(([conversationId, conversation]) => {
+          if (Array.isArray(conversation.workoutArtifacts) && conversation.workoutArtifacts.length) {
+            seedConversationArtifacts(conversationId, conversation.workoutArtifacts);
+          }
+        });
 
         // Set active conversation
         const lastActiveId = localStorage.getItem(`profile_${profile.id}_activeConversation`);
@@ -1135,6 +1287,22 @@ const AIChatAssistant = () => {
                 <span className="text-[#4A90E2] text-xl">💪</span>
                 <h3 className="font-semibold text-gray-800">Max - Your Personal Coach</h3>
               </div>
+              <button
+                onClick={handleToggleWorkoutPanel}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isPanelOpenForActive
+                    ? 'bg-[#4A90E2] text-white hover:bg-[#357ABD]'
+                    : 'bg-white border border-[#C7DCF7] text-[#4A90E2] hover:bg-[#E8F4FF]'
+                }`}
+              >
+                <PanelRightOpen className="w-4 h-4" />
+                Workout Workspace
+                {totalArtifactsCount > 0 && (
+                  <span className={`text-xs font-semibold ${isPanelOpenForActive ? 'text-white/80' : 'text-[#1D4ED8]'}`}>
+                    {totalArtifactsCount}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Toast Notification */}

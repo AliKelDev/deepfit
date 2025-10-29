@@ -2,13 +2,48 @@ import React, { createContext, useContext, useMemo, useState, useCallback } from
 
 const ArtifactPanelContext = createContext(null);
 
-const createEmptyConversationArtifacts = (conversationId) => ({
-  conversationId,
-  artifacts: [],
-  activeArtifactId: null,
-  createdAt: Date.now(),
-  updatedAt: Date.now(),
-});
+const normalizeArtifactEntry = (artifact) => {
+  if (!artifact) return null;
+  const payload = typeof artifact.payload === 'object' && artifact.payload !== null
+    ? { ...artifact.payload }
+    : {};
+
+  const id = artifact.id || payload.id;
+  if (id && !payload.id) {
+    payload.id = id;
+  }
+
+  return {
+    id,
+    name: artifact.name || payload.name || 'Untitled workout',
+    description: artifact.description || payload.description || '',
+    payload,
+    status: artifact.status || 'draft',
+    source: artifact.source || 'assistant',
+    createdAt: artifact.createdAt || Date.now(),
+    updatedAt: artifact.updatedAt || Date.now(),
+    version: artifact.version || 1,
+    isFavorite: Boolean(artifact.isFavorite),
+    linkedWorkoutId: artifact.linkedWorkoutId || null,
+    savedAt: artifact.savedAt || null,
+  };
+};
+
+const createEmptyConversationArtifacts = (conversationId, artifacts = []) => {
+  const normalizedArtifacts = Array.isArray(artifacts)
+    ? artifacts.map(normalizeArtifactEntry).filter(Boolean)
+    : [];
+
+  const latestId = normalizedArtifacts[normalizedArtifacts.length - 1]?.id || null;
+
+  return {
+    conversationId,
+    artifacts: normalizedArtifacts,
+    activeArtifactId: latestId,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+};
 
 export const ArtifactPanelProvider = ({ children }) => {
   const [conversationArtifacts, setConversationArtifacts] = useState({});
@@ -86,15 +121,12 @@ export const ArtifactPanelProvider = ({ children }) => {
         };
         artifacts[existingIndex] = storedArtifact;
       } else {
-        storedArtifact = {
+        storedArtifact = normalizeArtifactEntry({
           ...artifact,
           id: targetId,
-          status: artifact.status || 'draft',
-          source: artifact.source || 'assistant',
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          version: artifact.version || 1,
-        };
+        });
         artifacts.push(storedArtifact);
       }
 
@@ -265,6 +297,24 @@ export const ArtifactPanelProvider = ({ children }) => {
     });
   }, []);
 
+  const seedConversationArtifacts = useCallback((conversationId, artifacts = []) => {
+    if (!conversationId) {
+      return;
+    }
+
+    setConversationArtifacts(prev => {
+      const existing = prev[conversationId];
+      if (existing && existing.artifacts?.length) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [conversationId]: createEmptyConversationArtifacts(conversationId, artifacts),
+      };
+    });
+  }, []);
+
   const value = useMemo(() => ({
     conversationArtifacts,
     panelState,
@@ -278,6 +328,7 @@ export const ArtifactPanelProvider = ({ children }) => {
     closeArtifactPanel,
     resetArtifacts,
     clearConversationArtifacts,
+    seedConversationArtifacts,
   }), [
     conversationArtifacts,
     panelState,
@@ -291,6 +342,7 @@ export const ArtifactPanelProvider = ({ children }) => {
     closeArtifactPanel,
     resetArtifacts,
     clearConversationArtifacts,
+    seedConversationArtifacts,
   ]);
 
   return (
