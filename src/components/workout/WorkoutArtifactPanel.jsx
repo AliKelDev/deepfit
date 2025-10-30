@@ -30,6 +30,7 @@ const WorkoutArtifactPanel = () => {
     markArtifact,
     removeArtifact,
     closeArtifactPanel,
+    clearConversationArtifacts,
   } = useArtifactPanel();
   const { createWorkout, workouts } = useWorkout();
 
@@ -60,6 +61,18 @@ const WorkoutArtifactPanel = () => {
   const sortedArtifacts = useMemo(() => {
     return [...artifacts].sort((a, b) => (b?.updatedAt || 0) - (a?.updatedAt || 0));
   }, [artifacts]);
+
+  const allArtifacts = useMemo(() => {
+    return Object.entries(conversationArtifacts)
+      .flatMap(([convId, entry]) =>
+        (Array.isArray(entry?.artifacts) ? entry.artifacts : []).map((artifact) => ({
+          ...artifact,
+          conversationId: artifact.conversationId || convId,
+        }))
+      )
+      .filter(Boolean)
+      .sort((a, b) => (b?.updatedAt || 0) - (a?.updatedAt || 0));
+  }, [conversationArtifacts]);
 
   const activeArtifact = useMemo(() => {
     return sortedArtifacts.find((artifact) => artifact?.id === activeArtifactId) || sortedArtifacts[0] || null;
@@ -153,6 +166,20 @@ const WorkoutArtifactPanel = () => {
   };
 
   const currentStatus = statusCopy[activeArtifact?.status] || statusCopy.draft;
+
+  const handleRemoveAllDrafts = () => {
+    if (!allArtifacts.length) return;
+    const confirmed = window.confirm('Remove all workout drafts from the workspace? This cannot be undone.');
+    if (!confirmed) return;
+
+    Object.entries(conversationArtifacts).forEach(([convId, entry]) => {
+      if (!entry?.artifacts?.length) return;
+      entry.artifacts.forEach((artifact) => {
+        removeArtifact(convId, artifact.id);
+      });
+      clearConversationArtifacts(convId);
+    });
+  };
 
   const hasArtifacts = artifacts.length > 0;
 
@@ -408,6 +435,65 @@ const WorkoutArtifactPanel = () => {
                   );
                 })}
               </ul>
+            </section>
+
+            <section className="border border-[#E0EEFF] rounded-2xl bg-white p-4">
+              <header className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="w-4 h-4 text-[#4A90E2]" />
+                  <h4 className="text-sm font-semibold text-gray-800">All drafts</h4>
+                </div>
+                {allArtifacts.length > 0 && (
+                  <button
+                    onClick={handleRemoveAllDrafts}
+                    className="text-xs font-medium text-[#DC2626] hover:underline"
+                  >
+                    Delete all
+                  </button>
+                )}
+              </header>
+              {allArtifacts.length === 0 ? (
+                <p className="text-xs text-gray-600">No drafts stored in the workspace.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {allArtifacts.map((artifact) => {
+                    const status = statusCopy[artifact.status] || statusCopy.draft;
+                    return (
+                      <li
+                        key={`${artifact.conversationId || 'global'}-${artifact.id}`}
+                        className="flex items-center justify-between px-3 py-2 rounded-lg border border-[#E0EEFF] bg-[#F9FBFF] hover:bg-[#F1F7FF] transition-colors"
+                      >
+                        <button
+                          onClick={() => artifact.conversationId && selectArtifact(artifact.conversationId, artifact.id)}
+                          className="flex-1 text-left"
+                        >
+                          <p className="text-sm font-medium text-gray-800 truncate flex items-center gap-2">
+                            {artifact.name || 'Untitled workout'}
+                            {artifact.isFavorite && <Star className="w-3 h-3 text-[#F59E0B]" />}
+                          </p>
+                          <p className="text-xs text-gray-500 flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${status.tone}`}>
+                              {status.label}
+                            </span>
+                            {artifact.conversationId && (
+                              <span>Conversation: {artifact.conversationId.slice(-8)}</span>
+                            )}
+                            <span>
+                              Updated {new Date(artifact.updatedAt || Date.now()).toLocaleTimeString()}
+                            </span>
+                          </p>
+                        </button>
+                        <button
+                          onClick={() => artifact.conversationId && removeArtifact(artifact.conversationId, artifact.id)}
+                          className="ml-3 text-xs text-[#DC2626] hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </section>
 
             <section className="border border-[#E0EEFF] rounded-2xl bg-[#F7FBFF] p-4">

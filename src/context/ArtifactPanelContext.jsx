@@ -2,7 +2,7 @@ import React, { createContext, useContext, useMemo, useState, useCallback } from
 
 const ArtifactPanelContext = createContext(null);
 
-const normalizeArtifactEntry = (artifact) => {
+const normalizeArtifactEntry = (artifact, conversationId) => {
   if (!artifact) return null;
   const payload = typeof artifact.payload === 'object' && artifact.payload !== null
     ? { ...artifact.payload }
@@ -26,12 +26,13 @@ const normalizeArtifactEntry = (artifact) => {
     isFavorite: Boolean(artifact.isFavorite),
     linkedWorkoutId: artifact.linkedWorkoutId || null,
     savedAt: artifact.savedAt || null,
+    conversationId: artifact.conversationId || conversationId || null,
   };
 };
 
 const createEmptyConversationArtifacts = (conversationId, artifacts = []) => {
   const normalizedArtifacts = Array.isArray(artifacts)
-    ? artifacts.map(normalizeArtifactEntry).filter(Boolean)
+    ? artifacts.map((artifact) => normalizeArtifactEntry(artifact, conversationId)).filter(Boolean)
     : [];
 
   const latestId = normalizedArtifacts[normalizedArtifacts.length - 1]?.id || null;
@@ -118,6 +119,7 @@ export const ArtifactPanelProvider = ({ children }) => {
           },
           updatedAt: Date.now(),
           version: (previous?.version || 1) + 1,
+          conversationId: previous?.conversationId || conversationId,
         };
         artifacts[existingIndex] = storedArtifact;
       } else {
@@ -126,7 +128,8 @@ export const ArtifactPanelProvider = ({ children }) => {
           id: targetId,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-        });
+          conversationId,
+        }, conversationId);
         artifacts.push(storedArtifact);
       }
 
@@ -225,6 +228,7 @@ export const ArtifactPanelProvider = ({ children }) => {
           ...changes?.payload,
         },
         updatedAt: Date.now(),
+        conversationId: artifacts[index]?.conversationId || conversationId,
       };
 
       artifacts[index] = nextArtifact;

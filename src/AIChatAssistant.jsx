@@ -411,18 +411,16 @@ const AIChatAssistant = () => {
     getConversationEntry,
   } = useArtifactPanel();
 
-  const buildWorkspaceContext = useCallback((conversationId) => {
-    if (!conversationId) {
+  const buildWorkspaceContext = useCallback(() => {
+    const allArtifacts = Object.values(conversationArtifacts)
+      .flatMap((entry) => Array.isArray(entry?.artifacts) ? entry.artifacts : [])
+      .filter(Boolean);
+
+    if (!allArtifacts.length) {
       return null;
     }
 
-    const entry = conversationArtifacts[conversationId];
-    const artifacts = Array.isArray(entry?.artifacts) ? entry.artifacts : [];
-    if (!artifacts.length) {
-      return null;
-    }
-
-    const sorted = [...artifacts].sort((a, b) => (b?.updatedAt || 0) - (a?.updatedAt || 0));
+    const sorted = [...allArtifacts].sort((a, b) => (b?.updatedAt || 0) - (a?.updatedAt || 0));
     const lines = sorted.map((artifact, index) => {
       const parts = [
         `${index + 1}. ID: ${artifact.id}`,
@@ -430,6 +428,10 @@ const AIChatAssistant = () => {
         `Status: ${artifact.status || 'draft'}`,
         `Last updated: ${artifact.updatedAt ? new Date(artifact.updatedAt).toISOString() : 'unknown'}`,
       ];
+
+      if (artifact.conversationId) {
+        parts.push(`Conversation: ${artifact.conversationId}`);
+      }
 
       if (artifact.isFavorite) {
         parts.push('Marked as favorite');
@@ -442,7 +444,11 @@ const AIChatAssistant = () => {
       return parts.join(' | ');
     });
 
-    return `WORKOUT WORKSPACE SUMMARY:\n${lines.join('\n')}\nWhen updating or deleting a workout, reference the exact ID shown above.`;
+    return [
+      'WORKOUT WORKSPACE SUMMARY:',
+      ...lines,
+      'When updating or deleting a workout, reference the exact ID shown above.',
+    ].join('\n');
   }, [conversationArtifacts]);
 
   const markWorkspaceContextDirty = useCallback((conversationId) => {
@@ -468,10 +474,10 @@ const AIChatAssistant = () => {
   }, []);
 
   useEffect(() => {
-    if (activeConversationId) {
-      markWorkspaceContextDirty(activeConversationId);
+    if (Object.keys(conversationArtifacts).length) {
+      markWorkspaceContextDirty(null);
     }
-  }, [activeConversationId, markWorkspaceContextDirty]);
+  }, [conversationArtifacts, markWorkspaceContextDirty]);
 
   const findConversationWithArtifacts = useCallback((excludeId = null) => {
     const entries = Object.values(conversationArtifacts)
@@ -634,7 +640,6 @@ const AIChatAssistant = () => {
       }
 
       updatedConversation = nextConversation;
-      console.log('[updateConversationRecord] stored conversation', conversationId, nextConversation);
       return {
         ...prev,
         [conversationId]: nextConversation
@@ -730,6 +735,7 @@ const AIChatAssistant = () => {
           console.warn('delete_workout action missing id payload');
           return;
         }
+        const existingEntry = conversationArtifacts[conversationId];
         const result = removeArtifact(conversationId, targetId);
         if (result?.artifact) {
           console.log('[processAiResponse] delete_workout', {
@@ -739,34 +745,20 @@ const AIChatAssistant = () => {
           });
           deletedArtifactIds.push(targetId);
           entryAfterActions = result.entry;
+        } else {
+          console.warn('[processAiResponse] delete_workout failed', {
+            conversationId,
+            targetId,
+            available: Array.isArray(existingEntry?.artifacts)
+              ? existingEntry.artifacts.map((artifact) => artifact.id)
+              : [],
+          });
         }
       }
     });
 
     if (!entryAfterActions) {
       entryAfterActions = getConversationEntry(conversationId, conversationArtifacts);
-    }
-
-    if (entryAfterActions) {
-      const serializedArtifacts = entryAfterActions.artifacts.map((artifact) => ({
-        id: artifact.id,
-        name: artifact.name,
-        description: artifact.description,
-        payload: artifact.payload,
-        status: artifact.status,
-        source: artifact.source,
-        createdAt: artifact.createdAt,
-        updatedAt: artifact.updatedAt,
-        version: artifact.version,
-        isFavorite: artifact.isFavorite,
-        linkedWorkoutId: artifact.linkedWorkoutId,
-        savedAt: artifact.savedAt,
-      }));
-
-      updateConversationRecord(conversationId, (conversation) => ({
-        ...conversation,
-        workoutArtifacts: serializedArtifacts,
-      }));
     }
 
     if (createdArtifacts.length || updatedArtifacts.length || deletedArtifactIds.length) {
@@ -837,18 +829,31 @@ const AIChatAssistant = () => {
         const currentProfile = JSON.parse(localStorage.getItem('userProfile'));
         
         try {
-          const shouldIncludeContext = workspaceContextRef.current.needsSync && workspaceContextRef.current.summary;
+          let summary = workspaceContextRef.current.summary;
+          if (workspaceContextRef.current.needsSync || !summary) {
+            summary = buildWorkspaceContext(activeConversationId);
+            workspaceContextRef.current = {
+              conversationId: activeConversationId,
+              summary,
+              needsSync: false,
+            };
+          }
+          const shouldIncludeContext = Boolean(summary);
           const data = await callAiChat({
             messages: [...(currentConversations[activeConversationId]?.messages || []), {
               ...userMessage,
               content: `${message}\n\n${workoutDetails}`
             }],
             userProfile: currentProfile,
-            ...(shouldIncludeContext ? { conversationContext: workspaceContextRef.current.summary } : {}),
+            ...(shouldIncludeContext ? { conversationContext: summary } : {}),
           });
 
           if (shouldIncludeContext) {
-            workspaceContextRef.current.needsSync = false;
+            workspaceContextRef.current = {
+              conversationId: activeConversationId,
+              summary,
+              needsSync: false,
+            };
           }
 
           processAiResponse(activeConversationId, data);
@@ -926,15 +931,28 @@ const AIChatAssistant = () => {
         
         try {
           const conversationMessages = profileConversations[activeConversationId]?.messages || [];
-          const shouldIncludeContext = workspaceContextRef.current.needsSync && workspaceContextRef.current.summary;
+          let summary = workspaceContextRef.current.summary;
+          let shouldIncludeContext = false;
+          if (workspaceContextRef.current.needsSync) {
+            if (!summary) {
+              summary = buildWorkspaceContext(activeConversationId);
+              workspaceContextRef.current = {
+                conversationId: activeConversationId,
+                summary,
+                needsSync: Boolean(summary) && workspaceContextRef.current.needsSync,
+              };
+            }
+            shouldIncludeContext = Boolean(summary);
+          }
           const data = await callAiChat({
             messages: [...conversationMessages, userMessage],
             userProfile: activeProfile,
-            ...(shouldIncludeContext ? { conversationContext: workspaceContextRef.current.summary } : {}),
+            ...(shouldIncludeContext ? { conversationContext: summary } : {}),
           });
 
           if (shouldIncludeContext) {
             workspaceContextRef.current.needsSync = false;
+            workspaceContextRef.current.summary = summary;
           }
 
           processAiResponse(activeConversationId, data);
@@ -1263,10 +1281,14 @@ const AIChatAssistant = () => {
 
     const retryFetch = async (retries = 3, delay = 1000) => {
       const baseMessages = profileConversations[activeConversationId]?.messages || [];
-    let conversationContext = null;
-    if (workspaceContextRef.current.needsSync && workspaceContextRef.current.summary) {
-      conversationContext = workspaceContextRef.current.summary;
-      workspaceContextRef.current.needsSync = false;
+    let conversationContext = workspaceContextRef.current.summary;
+    if (workspaceContextRef.current.needsSync || !conversationContext) {
+      conversationContext = buildWorkspaceContext(activeConversationId);
+      workspaceContextRef.current = {
+        conversationId: activeConversationId,
+        summary: conversationContext,
+        needsSync: false,
+      };
     }
     const payload = {
       messages: [...baseMessages, userMessage],
@@ -1686,10 +1708,12 @@ const AIChatAssistant = () => {
                               ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
                               ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
                               li: ({children}) => <li className="ml-2">{children}</li>,
-                              code: ({inline, children}) => 
-                                inline ? 
-                                  <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code> :
-                                  <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto my-2"><code className="font-mono text-sm">{children}</code></pre>,
+                              code: ({inline, children}) =>
+                                inline ? (
+                                  <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>
+                                ) : (
+                                  <code className="block bg-gray-100 p-3 rounded-lg overflow-x-auto my-2 font-mono text-sm whitespace-pre-wrap">{children}</code>
+                                ),
                               h1: ({children}) => <h1 className="text-xl font-bold mb-2">{children}</h1>,
                               h2: ({children}) => <h2 className="text-lg font-bold mb-2">{children}</h2>,
                               h3: ({children}) => <h3 className="text-md font-bold mb-2">{children}</h3>
