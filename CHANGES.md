@@ -1,17 +1,16 @@
-# Recent Changes
+# Workspace and Assistant Updates
 
-## Workspace refactor
-- Moved workout artifacts into the `ArtifactPanelContext`, allowing drafts to live independently of conversation messages.
-- Added helpers to upsert, select, mark, and delete artifacts directly from the context.
-- Synced artifacts back into persisted conversations for local storage compatibility.
+## Artifact management
+- Move workout drafts into the artifact panel context so they persist independently of chat messages.
+- Normalise artifacts (IDs, names, metadata) and keep conversations in sync for localStorage persistence.
+- Add debug logging for create/update/delete flows to help validate action tokens.
 
-## Workout Artifact Panel
-- Rebuilt the panel UI around the new context data and added slide-in/out animations.
-- Introduced manual toggle controls, fallback handling when the active conversation has no workouts, and an empty-state view.
-- Collapsed the validation controls once a workout is saved, replacing them with a confirmation banner.
-- Removed navigation away from the chat flow; all actions stay inside the workspace.
+## Workout workspace UI
+- Rebuild the workspace panel with a manual toggle, empty state, and slide-in/out animations.
+- Collapse validation actions after saving a workout and keep a confirmation banner visible.
+- Show conversation titles and fallback information when viewing drafts from other threads.
 
-## Chat Assistant updates
-- Simplified `processAiResponse` to interact with the artifact store and open the panel automatically when new drafts arrive.
-- Added workspace toggles and counters in the chat header so users can open the workspace at will and see the number of drafts.
-- Updated local storage hydration to seed the artifact context when conversations are loaded.
+## Assistant changes
+- Provide Gemini with a workspace summary only when workouts change, so it has IDs for updates or deletes without bloating every request.
+- Seed cached summaries and workspace state when loading existing conversations.
+- Update the README with project overview, token format, and development instructions.

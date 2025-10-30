@@ -385,6 +385,12 @@ const AIChatAssistant = () => {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const notificationTimeoutRef = useRef(null);
+  const workspaceContextRef = useRef({
+    conversationId: null,
+    summary: null,
+    needsSync: false,
+  });
+  const lastWorkspaceSummariesRef = useRef({});
 
   const lastRequestTime = useRef(0);
   const REQUEST_COOLDOWN = 2000;
@@ -405,6 +411,49 @@ const AIChatAssistant = () => {
     getConversationEntry,
   } = useArtifactPanel();
 
+  const buildWorkspaceContext = useCallback((conversationId) => {
+    if (!conversationId) {
+      return null;
+    }
+
+    const entry = conversationArtifacts[conversationId];
+    const artifacts = Array.isArray(entry?.artifacts) ? entry.artifacts : [];
+    if (!artifacts.length) {
+      return null;
+    }
+
+    const sorted = [...artifacts].sort((a, b) => (b?.updatedAt || 0) - (a?.updatedAt || 0));
+    const lines = sorted.map((artifact, index) => {
+      const parts = [
+        `${index + 1}. ID: ${artifact.id}`,
+        `Name: ${artifact.name || 'Untitled workout'}`,
+        `Status: ${artifact.status || 'draft'}`,
+        `Last updated: ${artifact.updatedAt ? new Date(artifact.updatedAt).toISOString() : 'unknown'}`,
+      ];
+
+      if (artifact.isFavorite) {
+        parts.push('Marked as favorite');
+      }
+
+      if (artifact.linkedWorkoutId) {
+        parts.push(`Linked workout ID: ${artifact.linkedWorkoutId}`);
+      }
+
+      return parts.join(' | ');
+    });
+
+    return `WORKOUT WORKSPACE SUMMARY:\n${lines.join('\n')}\nWhen updating or deleting a workout, reference the exact ID shown above.`;
+  }, [conversationArtifacts]);
+
+  const markWorkspaceContextDirty = useCallback((conversationId) => {
+    const summary = buildWorkspaceContext(conversationId);
+    workspaceContextRef.current = {
+      conversationId,
+      summary,
+      needsSync: Boolean(summary),
+    };
+  }, [buildWorkspaceContext]);
+
   const showToast = useCallback((message, duration = 3000) => {
     setNotificationMessage(message);
     setShowNotification(true);
@@ -416,7 +465,13 @@ const AIChatAssistant = () => {
     notificationTimeoutRef.current = setTimeout(() => {
       setShowNotification(false);
     }, duration);
-  }, [seedConversationArtifacts]);
+  }, []);
+
+  useEffect(() => {
+    if (activeConversationId) {
+      markWorkspaceContextDirty(activeConversationId);
+    }
+  }, [activeConversationId, markWorkspaceContextDirty]);
 
   const findConversationWithArtifacts = useCallback((excludeId = null) => {
     const entries = Object.values(conversationArtifacts)
@@ -640,6 +695,10 @@ const AIChatAssistant = () => {
           source: 'assistant',
         });
         if (result?.artifact) {
+          console.log('[processAiResponse] create_workout', {
+            conversationId,
+            artifactId: result.artifact.id,
+          });
           createdArtifacts.push(result.artifact);
           entryAfterActions = result.entry;
         }
@@ -655,6 +714,10 @@ const AIChatAssistant = () => {
           source: 'assistant',
         });
         if (result?.artifact) {
+          console.log('[processAiResponse] update_workout', {
+            conversationId,
+            artifactId: result.artifact.id,
+          });
           updatedArtifacts.push(result.artifact);
           entryAfterActions = result.entry;
         }
@@ -669,6 +732,11 @@ const AIChatAssistant = () => {
         }
         const result = removeArtifact(conversationId, targetId);
         if (result?.artifact) {
+          console.log('[processAiResponse] delete_workout', {
+            conversationId,
+            deletedId: targetId,
+            artifactsRemaining: result?.entry?.artifacts?.length || 0,
+          });
           deletedArtifactIds.push(targetId);
           entryAfterActions = result.entry;
         }
@@ -699,6 +767,10 @@ const AIChatAssistant = () => {
         ...conversation,
         workoutArtifacts: serializedArtifacts,
       }));
+    }
+
+    if (createdArtifacts.length || updatedArtifacts.length || deletedArtifactIds.length) {
+      markWorkspaceContextDirty(conversationId);
     }
 
     if (createdArtifacts.length || updatedArtifacts.length) {
@@ -765,13 +837,19 @@ const AIChatAssistant = () => {
         const currentProfile = JSON.parse(localStorage.getItem('userProfile'));
         
         try {
+          const shouldIncludeContext = workspaceContextRef.current.needsSync && workspaceContextRef.current.summary;
           const data = await callAiChat({
             messages: [...(currentConversations[activeConversationId]?.messages || []), {
               ...userMessage,
               content: `${message}\n\n${workoutDetails}`
             }],
-            userProfile: currentProfile
+            userProfile: currentProfile,
+            ...(shouldIncludeContext ? { conversationContext: workspaceContextRef.current.summary } : {}),
           });
+
+          if (shouldIncludeContext) {
+            workspaceContextRef.current.needsSync = false;
+          }
 
           processAiResponse(activeConversationId, data);
           
@@ -791,7 +869,7 @@ const AIChatAssistant = () => {
       setInitialMessage(location.state.message);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, activeConversationId, navigate]);
+  }, [location.state, activeConversationId, navigate, buildWorkspaceContext]);
 
   // Handle progress data separately to fix the double-sending issue
   useEffect(() => {
@@ -848,10 +926,16 @@ const AIChatAssistant = () => {
         
         try {
           const conversationMessages = profileConversations[activeConversationId]?.messages || [];
+          const shouldIncludeContext = workspaceContextRef.current.needsSync && workspaceContextRef.current.summary;
           const data = await callAiChat({
             messages: [...conversationMessages, userMessage],
-            userProfile: activeProfile
+            userProfile: activeProfile,
+            ...(shouldIncludeContext ? { conversationContext: workspaceContextRef.current.summary } : {}),
           });
+
+          if (shouldIncludeContext) {
+            workspaceContextRef.current.needsSync = false;
+          }
 
           processAiResponse(activeConversationId, data);
           showToast("Max has analyzed your progress data", 2000);
@@ -868,7 +952,7 @@ const AIChatAssistant = () => {
         }
       })();
     }
-  }, [location.state, activeConversationId, activeProfile, navigate, processingId]);
+  }, [location.state, activeConversationId, activeProfile, navigate, processingId, buildWorkspaceContext, profileConversations]);
 
   // Set the input field when initialMessage changes
   useEffect(() => {
@@ -941,6 +1025,44 @@ const AIChatAssistant = () => {
     });
   }, [conversationArtifacts, updateConversationRecord]);
 
+  useEffect(() => {
+    const summaries = { ...lastWorkspaceSummariesRef.current };
+    let latestChangedConversation = null;
+    Object.keys(conversationArtifacts).forEach((conversationId) => {
+      const summary = buildWorkspaceContext(conversationId);
+      if (summary && summaries[conversationId] !== summary) {
+        summaries[conversationId] = summary;
+        latestChangedConversation = conversationId;
+        workspaceContextRef.current = {
+          conversationId,
+          summary,
+          needsSync: true,
+        };
+      } else if (!summary && summaries[conversationId]) {
+        delete summaries[conversationId];
+        if (workspaceContextRef.current.conversationId === conversationId) {
+          workspaceContextRef.current = {
+            conversationId,
+            summary: null,
+            needsSync: false,
+          };
+        }
+      }
+    });
+
+    lastWorkspaceSummariesRef.current = summaries;
+
+    if (!latestChangedConversation && workspaceContextRef.current.needsSync) {
+      const context = buildWorkspaceContext(workspaceContextRef.current.conversationId);
+      if (!context) {
+        workspaceContextRef.current.needsSync = false;
+        workspaceContextRef.current.summary = null;
+      } else {
+        workspaceContextRef.current.summary = context;
+      }
+    }
+  }, [conversationArtifacts, buildWorkspaceContext]);
+
   // Show notification/toast function
   // Load profile and check if first time
   useEffect(() => {
@@ -977,6 +1099,12 @@ const AIChatAssistant = () => {
             seedConversationArtifacts(conversationId, conversation.workoutArtifacts);
           }
         });
+
+        const existingWithArtifacts = normalizedEntries.find(([, conversation]) =>
+          Array.isArray(conversation.workoutArtifacts) && conversation.workoutArtifacts.length);
+        if (existingWithArtifacts) {
+          markWorkspaceContextDirty(existingWithArtifacts[0]);
+        }
 
         // Set active conversation
         const lastActiveId = localStorage.getItem(`profile_${profile.id}_activeConversation`);
@@ -1135,11 +1263,17 @@ const AIChatAssistant = () => {
 
     const retryFetch = async (retries = 3, delay = 1000) => {
       const baseMessages = profileConversations[activeConversationId]?.messages || [];
-      const payload = {
-        messages: [...baseMessages, userMessage],
-        imageData: imagePayload,
-        userProfile: activeProfile
-      };
+    let conversationContext = null;
+    if (workspaceContextRef.current.needsSync && workspaceContextRef.current.summary) {
+      conversationContext = workspaceContextRef.current.summary;
+      workspaceContextRef.current.needsSync = false;
+    }
+    const payload = {
+      messages: [...baseMessages, userMessage],
+      imageData: imagePayload,
+      userProfile: activeProfile,
+      ...(conversationContext ? { conversationContext } : {}),
+    };
 
       for (let attempt = 1; attempt <= retries; attempt++) {
         try {

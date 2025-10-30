@@ -38,13 +38,24 @@ const WorkoutArtifactPanel = () => {
   const artifacts = Array.isArray(entry?.artifacts) ? entry.artifacts : [];
   const activeArtifactId = entry?.activeArtifactId || artifacts[0]?.id || null;
 
-  useEffect(() => {
-    if (panelState.isOpen && conversationId && artifacts.length === 0) {
-      closeArtifactPanel();
-    }
-  }, [artifacts.length, closeArtifactPanel, conversationId, panelState.isOpen]);
+  const notify = panelState.extras?.notify;
+  const conversationTitle = panelState.extras?.conversationTitle;
+  const fallbackUsed = panelState.extras?.fallbackUsed;
 
-  const isVisible = panelState.isOpen && conversationId;
+  useEffect(() => {
+    if (!panelState.isOpen) {
+      return;
+    }
+
+    if (!conversationId) {
+      return;
+    }
+
+    if (!artifacts.length && !fallbackUsed) {
+      // Keep the panel open to show the empty state instead of closing it immediately.
+      return;
+    }
+  }, [artifacts.length, closeArtifactPanel, conversationId, panelState.isOpen, fallbackUsed]);
 
   const sortedArtifacts = useMemo(() => {
     return [...artifacts].sort((a, b) => (b?.updatedAt || 0) - (a?.updatedAt || 0));
@@ -59,10 +70,6 @@ const WorkoutArtifactPanel = () => {
   useEffect(() => {
     setNameDraft(activeArtifact?.name || '');
   }, [activeArtifact?.id, activeArtifact?.name]);
-
-  const notify = panelState.extras?.notify;
-  const conversationTitle = panelState.extras?.conversationTitle;
-  const fallbackUsed = panelState.extras?.fallbackUsed;
 
   const isValidated = activeArtifact?.status === 'saved';
 
@@ -147,11 +154,11 @@ const WorkoutArtifactPanel = () => {
 
   const currentStatus = statusCopy[activeArtifact?.status] || statusCopy.draft;
 
-  if (!isVisible) {
+  const hasArtifacts = artifacts.length > 0;
+
+  if (!conversationId) {
     return null;
   }
-
-  const hasArtifacts = artifacts.length > 0;
 
   return (
     <AnimatePresence>
@@ -161,7 +168,7 @@ const WorkoutArtifactPanel = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.4 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="fixed inset-0 bg-black z-40"
             onClick={handleClose}
           />
@@ -169,7 +176,11 @@ const WorkoutArtifactPanel = () => {
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+            transition={{
+              type: 'tween',
+              ease: 'easeInOut',
+              duration: 0.28,
+            }}
             className="fixed right-0 top-0 h-full w-full max-w-xl bg-white border-l border-[#B8D8F8] shadow-2xl z-50 flex flex-col"
             role="complementary"
             aria-label="Workout workspace"

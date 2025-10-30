@@ -137,6 +137,14 @@ export const ArtifactPanelProvider = ({ children }) => {
       };
     });
 
+    if (entry && storedArtifact) {
+      console.log('[ArtifactPanelContext] upsertArtifact', {
+        conversationId,
+        artifactId: storedArtifact.id,
+        total: entry.artifacts.length,
+      });
+    }
+
     return entry && storedArtifact ? { entry, artifact: storedArtifact } : null;
   }, [setConversationEntry]);
 
@@ -165,6 +173,14 @@ export const ArtifactPanelProvider = ({ children }) => {
           : current.activeArtifactId,
       };
     });
+
+    if (entry && removedArtifact) {
+      console.log('[ArtifactPanelContext] removeArtifact', {
+        conversationId,
+        artifactId,
+        remaining: entry.artifacts.length,
+      });
+    }
 
     return entry && removedArtifact ? { entry, artifact: removedArtifact } : null;
   }, [setConversationEntry]);
